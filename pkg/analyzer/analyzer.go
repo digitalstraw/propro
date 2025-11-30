@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"flag"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -9,14 +10,13 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/passes/buildssa"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 )
 
 var (
 	EntityFile string
-	Structs    string
+	Structs    []string
 	SkipTests  bool
 )
 
@@ -29,7 +29,18 @@ var (
 
 func init() {
 	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to the Go source file defining the list of protected structs")
-	flagSet.StringVar(&Structs, "structs", "", "Comma-separated list of struct names to protect (alternative to entityListFile)")
+
+	strstr := ""
+	flagSet.StringVar(&strstr, "structs", "", "Comma-separated list of struct names to protect (alternative to entityListFile)")
+	fmt.Println("strstr=" + strstr)
+
+	if strstr != "" {
+		for _, structName := range strings.Split(strstr, ",") {
+			structName = strings.TrimSpace(structName)
+			Structs = append(Structs, structName)
+		}
+	}
+
 	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip analysis of test files")
 }
 
@@ -39,7 +50,6 @@ func NewAnalyzer() *analysis.Analyzer {
 		Doc:  "detects assignments to exported fields of protected structs outside of methods",
 		Requires: []*analysis.Analyzer{
 			inspect.Analyzer,
-			buildssa.Analyzer,
 		},
 		Flags: flagSet,
 		Run:   run,
@@ -51,11 +61,9 @@ func createProtectedStructsMap() {
 		ProtectedStructsMap = LoadEntityList(EntityFile)
 	}
 
-	if Structs != "" {
-		for _, structName := range strings.Split(Structs, ",") {
-			structName = strings.TrimSpace(structName)
-			ProtectedStructsMap[structName] = true
-		}
+	for _, structName := range Structs {
+		structName = strings.TrimSpace(structName)
+		ProtectedStructsMap[structName] = true
 	}
 
 	if len(ProtectedStructsMap) == 0 {
@@ -73,18 +81,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	insp.Preorder(nodeFilter, func(n ast.Node) {
-		asg := n.(*ast.AssignStmt)
-
-		if pass.TypesInfo == nil {
-			// defensive safety (should not trigger now)
-			pass.Reportf(asg.Pos(), "TypesInfo is nil")
-			return
-		}
-
-		switch stmt := n.(type) {
+		switch node := n.(type) {
 
 		case *ast.AssignStmt:
-			for _, lhs := range stmt.Lhs {
+			for _, lhs := range node.Lhs {
 				selector, ok := lhs.(*ast.SelectorExpr)
 				if !ok {
 					continue
@@ -118,7 +118,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				}
 
 				// skip assignments inside struct methods
-				if enclosing := findEnclosingFunc(pass, stmt.Pos()); enclosing != nil && enclosing.Recv != nil {
+				if enclosing := findEnclosingFunc(pass, node.Pos()); enclosing != nil && enclosing.Recv != nil {
 					for _, recv := range enclosing.Recv.List {
 						recvType := pass.TypesInfo.TypeOf(recv.Type)
 						if isSameStructType(recvType, structName) {
