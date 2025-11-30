@@ -73,6 +73,14 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	insp.Preorder(nodeFilter, func(n ast.Node) {
+		asg := n.(*ast.AssignStmt)
+
+		if pass.TypesInfo == nil {
+			// defensive safety (should not trigger now)
+			pass.Reportf(asg.Pos(), "TypesInfo is nil")
+			return
+		}
+
 		switch stmt := n.(type) {
 
 		case *ast.AssignStmt:
