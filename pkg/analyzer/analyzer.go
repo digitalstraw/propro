@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
+	"golang.org/x/tools/go/analysis/passes/buildssa"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 )
@@ -38,6 +39,7 @@ func NewAnalyzer() *analysis.Analyzer {
 		Doc:  "detects assignments to exported fields of protected structs outside of methods",
 		Requires: []*analysis.Analyzer{
 			inspect.Analyzer,
+			buildssa.Analyzer,
 		},
 		Flags: flagSet,
 		Run:   run,
