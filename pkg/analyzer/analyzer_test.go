@@ -22,28 +22,35 @@ func setUp() string {
 
 func TestWithEntityFileParameter(t *testing.T) {
 	testdata := setUp()
-	EntityFile = filepath.Join(testdata, "src/config/entities.go")
 
-	analysistest.Run(t, testdata, NewAnalyzer(), "protectselected")
+	cfg := map[string]any{
+		"entityListFile": filepath.Join(testdata, "src/config/entities.go"),
+	}
+
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
 }
 
 func TestWithStructsParameter(t *testing.T) {
 	testdata := setUp()
-	Structs = []string{"Entity", "SubEntity"}
+	cfg := map[string]any{
+		"structs": []string{"Entity", "SubEntity"},
+	}
 
-	analysistest.Run(t, testdata, NewAnalyzer(), "protectselected")
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
 }
 
 func TestWithEntityFileAndStructs(t *testing.T) {
 	testdata := setUp()
-	EntityFile = filepath.Join(testdata, "src/config2/entities.go")
-	Structs = []string{"SubEntity"}
+	cfg := map[string]any{
+		"entityListFile": filepath.Join(testdata, "src/config/entities.go"),
+		"structs":        []string{"Entity", "SubEntity"},
+	}
 
-	analysistest.Run(t, testdata, NewAnalyzer(), "protectselected")
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
 }
 
 func TestWithNoParameters_allStructsAreProtected(t *testing.T) {
 	testdata := setUp()
 
-	analysistest.Run(t, testdata, NewAnalyzer(), "protectall")
+	analysistest.Run(t, testdata, NewAnalyzer(map[string]any{}), "protectall")
 }

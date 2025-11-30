@@ -2,7 +2,6 @@ package analyzer
 
 import (
 	"flag"
-	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -32,7 +31,6 @@ func init() {
 
 	strstr := ""
 	flagSet.StringVar(&strstr, "structs", "", "Comma-separated list of struct names to protect (alternative to entityListFile)")
-	fmt.Println("strstr=" + strstr)
 
 	if strstr != "" {
 		for _, structName := range strings.Split(strstr, ",") {
@@ -44,7 +42,21 @@ func init() {
 	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip analysis of test files")
 }
 
-func NewAnalyzer() *analysis.Analyzer {
+func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
+	if entityListFile, ok := cfg["entityListFile"].(string); ok && entityListFile != "" {
+		EntityFile = entityListFile
+	}
+
+	if structs, ok := cfg["structs"].([]string); ok && structs != nil {
+		for _, structName := range structs {
+			structName = strings.TrimSpace(structName)
+			Structs = append(Structs, structName)
+		}
+	}
+	if skipTests, ok := cfg["skipTests"].(bool); ok {
+		SkipTests = skipTests
+	}
+
 	return &analysis.Analyzer{
 		Name: "propro",
 		Doc:  "detects assignments to exported fields of protected structs outside of methods",
@@ -78,6 +90,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 
 	nodeFilter := []ast.Node{
 		(*ast.AssignStmt)(nil),
+		(*ast.SelectorExpr)(nil),
 	}
 
 	insp.Preorder(nodeFilter, func(n ast.Node) {
@@ -87,6 +100,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 			for _, lhs := range node.Lhs {
 				selector, ok := lhs.(*ast.SelectorExpr)
 				if !ok {
+					continue
+				}
+
+				if pass.TypesInfo == nil {
 					continue
 				}
 
