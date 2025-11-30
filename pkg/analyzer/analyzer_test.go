@@ -11,7 +11,7 @@ import (
 func setUp() string {
 	ProtectedStructsMap = make(map[string]bool)
 	EntityFile = ""
-	Structs = ""
+	Structs = []string{}
 	SkipTests = false
 
 	path, _ := os.Getwd()
@@ -29,7 +29,7 @@ func TestWithEntityFileParameter(t *testing.T) {
 
 func TestWithStructsParameter(t *testing.T) {
 	testdata := setUp()
-	Structs = "Entity, SubEntity"
+	Structs = []string{"Entity", "SubEntity"}
 
 	analysistest.Run(t, testdata, NewAnalyzer(), "protectselected")
 }
@@ -37,7 +37,7 @@ func TestWithStructsParameter(t *testing.T) {
 func TestWithEntityFileAndStructs(t *testing.T) {
 	testdata := setUp()
 	EntityFile = filepath.Join(testdata, "src/config2/entities.go")
-	Structs = "SubEntity"
+	Structs = []string{"SubEntity"}
 
 	analysistest.Run(t, testdata, NewAnalyzer(), "protectselected")
 }

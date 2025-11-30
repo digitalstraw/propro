@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"flag"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -14,10 +15,9 @@ import (
 )
 
 var (
-	EntityFile  string
-	Structs     string
-	StructArray []string
-	SkipTests   bool
+	EntityFile string
+	Structs    []string
+	SkipTests  bool
 )
 
 // ProtectedStructsMap stores the whitelist of struct names
@@ -29,7 +29,18 @@ var (
 
 func init() {
 	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to the Go source file defining the list of protected structs")
-	flagSet.StringVar(&Structs, "structs", "", "Comma-separated list of struct names to protect (alternative to entityListFile)")
+
+	strstr := ""
+	flagSet.StringVar(&strstr, "structs", "", "Comma-separated list of struct names to protect (alternative to entityListFile)")
+	fmt.Println("strstr=" + strstr)
+
+	if strstr != "" {
+		for _, structName := range strings.Split(strstr, ",") {
+			structName = strings.TrimSpace(structName)
+			Structs = append(Structs, structName)
+		}
+	}
+
 	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip analysis of test files")
 }
 
@@ -50,11 +61,9 @@ func createProtectedStructsMap() {
 		ProtectedStructsMap = LoadEntityList(EntityFile)
 	}
 
-	if Structs != "" {
-		for _, structName := range strings.Split(Structs, ",") {
-			structName = strings.TrimSpace(structName)
-			ProtectedStructsMap[structName] = true
-		}
+	for _, structName := range Structs {
+		structName = strings.TrimSpace(structName)
+		ProtectedStructsMap[structName] = true
 	}
 
 	if len(ProtectedStructsMap) == 0 {
