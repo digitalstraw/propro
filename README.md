@@ -42,7 +42,7 @@ If neither is specified, the linter **protects ALL STRUCTS**. If you don't want 
 
 ## Usage
 ```bash
-go get github.com/digitalstraw/propro/cmd/protectfields
+go get github.com/digitalstraw/propro/cmd/propro
 
 propro .
 ```

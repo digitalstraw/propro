@@ -34,7 +34,7 @@ func init() {
 
 func NewAnalyzer() *analysis.Analyzer {
 	return &analysis.Analyzer{
-		Name: "protectfields",
+		Name: "propro",
 		Doc:  "detects assignments to exported fields of protected structs outside of methods",
 		Requires: []*analysis.Analyzer{
 			inspect.Analyzer,
