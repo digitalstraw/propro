@@ -9,15 +9,15 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/analysis"
-	"golang.org/x/tools/go/analysis/passes/buildssa"
 	"golang.org/x/tools/go/analysis/passes/inspect"
 	"golang.org/x/tools/go/ast/inspector"
 )
 
 var (
-	EntityFile string
-	Structs    string
-	SkipTests  bool
+	EntityFile  string
+	Structs     string
+	StructArray []string
+	SkipTests   bool
 )
 
 // ProtectedStructsMap stores the whitelist of struct names
@@ -39,7 +39,6 @@ func NewAnalyzer() *analysis.Analyzer {
 		Doc:  "detects assignments to exported fields of protected structs outside of methods",
 		Requires: []*analysis.Analyzer{
 			inspect.Analyzer,
-			buildssa.Analyzer,
 		},
 		Flags: flagSet,
 		Run:   run,
@@ -73,18 +72,10 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	}
 
 	insp.Preorder(nodeFilter, func(n ast.Node) {
-		asg := n.(*ast.AssignStmt)
-
-		if pass.TypesInfo == nil {
-			// defensive safety (should not trigger now)
-			pass.Reportf(asg.Pos(), "TypesInfo is nil")
-			return
-		}
-
-		switch stmt := n.(type) {
+		switch node := n.(type) {
 
 		case *ast.AssignStmt:
-			for _, lhs := range stmt.Lhs {
+			for _, lhs := range node.Lhs {
 				selector, ok := lhs.(*ast.SelectorExpr)
 				if !ok {
 					continue
@@ -118,7 +109,7 @@ func run(pass *analysis.Pass) (interface{}, error) {
 				}
 
 				// skip assignments inside struct methods
-				if enclosing := findEnclosingFunc(pass, stmt.Pos()); enclosing != nil && enclosing.Recv != nil {
+				if enclosing := findEnclosingFunc(pass, node.Pos()); enclosing != nil && enclosing.Recv != nil {
 					for _, recv := range enclosing.Recv.List {
 						recvType := pass.TypesInfo.TypeOf(recv.Type)
 						if isSameStructType(recvType, structName) {
