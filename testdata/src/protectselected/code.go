@@ -2,6 +2,7 @@ package protectselected
 
 type UnProtectedEntity struct {
 	UnProtectedField string
+	UnprotectedInt   int
 }
 
 type Entity struct {
@@ -101,4 +102,13 @@ func SomeFunc9() {
 func SomeFunc10() {
 	e := &UnProtectedEntity{}
 	e.UnProtectedField = "value"
+	e.UnprotectedInt++
+	e.UnprotectedInt--
+	e.UnprotectedInt += 10
+	e.UnprotectedInt -= 10
+	e.UnprotectedInt *= 10
+	e.UnprotectedInt /= 10
+	e.UnprotectedInt = 10
+	*(&e.UnprotectedInt)++
+	*(&e.UnprotectedInt)--
 }
