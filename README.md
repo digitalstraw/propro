@@ -51,3 +51,20 @@ Available parameters:
 - `-structs string` - comma-separated list of struct names to be protected.
 - `-skipTests bool` - if set, test files will be skipped. `false` by default.
 
+
+## Code Examples
+```go
+type Entity struct {
+	ProtectedField       string
+}
+
+func (s *SubEntity) SetProtectedField(value string) {
+	s.ProtectedField = value
+}
+
+func SomeFunc1() {
+	e := &Entity{}
+	e.SetProtectedField("value") // OK
+	e.ProtectedField = "value" // Error
+}
+```

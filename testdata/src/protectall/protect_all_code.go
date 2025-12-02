@@ -84,6 +84,18 @@ func (e *Entity) SetProtectedField(value string) {
 	e.ProtectedField = value
 }
 
+type SubEntityWithPtrComposition struct {
+	*Entity
+
+	ProtectedField string
+}
+
+type SubEntityWithComposition struct {
+	Entity
+
+	ProtectedField string
+}
+
 func SomeFunc1() {
 	e := &Entity{}
 	e.SetProtectedField("value")
@@ -141,18 +153,6 @@ func SomeFunc10() {
 	// In this version, this will be protected by default in TestWithNoParameters_allStructsAreProtected.
 	e := &UnProtectedEntity{}
 	e.UnProtectedField = "value" // want "assignment to exported field UnProtectedEntity.UnProtectedField is forbidden outside its methods"
-}
-
-type SubEntityWithPtrComposition struct {
-	*Entity
-
-	ProtectedField string
-}
-
-type SubEntityWithComposition struct {
-	Entity
-
-	ProtectedField string
 }
 
 func SomeFunc11() {
