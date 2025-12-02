@@ -58,8 +58,8 @@ type Entity struct {
 	ProtectedField       string
 }
 
-func (s *SubEntity) SetProtectedField(value string) {
-	s.ProtectedField = value
+func (e *Entity) SetProtectedField(value string) {
+	e.ProtectedField = value
 }
 
 func SomeFunc1() {

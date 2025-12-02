@@ -31,8 +31,20 @@ var (
 func init() {
 	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to file listing protected structs")
 	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip test files")
-	// placeholder — populated from cfg in NewAnalyzer
-	flagSet.String("structs", "", "Comma-separated list of protected structs")
+
+	flagSet.Func("structs", "Comma-separated list of protected structs", func(s string) error {
+		if s == "" {
+			return nil
+		}
+		parts := strings.Split(s, ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				Structs = append(Structs, part)
+			}
+		}
+		return nil
+	})
 }
 
 func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
@@ -46,6 +58,8 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 		SkipTests = v
 	}
 
+	buildProtectedStructMap()
+
 	return &analysis.Analyzer{
 		Name:     "propro",
 		Doc:      "Detects writes to exported fields of protected structs outside methods",
@@ -57,13 +71,11 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 
 func run(pass *analysis.Pass) (any, error) {
 	seen = make(map[string]bool)
-	buildProtectedStructMap()
 
 	aliasMap := map[types.Object]*ast.SelectorExpr{}
-
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-
 	inNodes := []ast.Node{(*ast.AssignStmt)(nil), (*ast.IncDecStmt)(nil), (*ast.StarExpr)(nil)}
+
 	insp.Preorder(inNodes, func(n ast.Node) {
 		switch node := n.(type) {
 		case *ast.AssignStmt:
@@ -78,11 +90,6 @@ func run(pass *analysis.Pass) (any, error) {
 			if sel := resolveMutationTarget(pass, node.X, aliasMap); sel != nil {
 				handleSelectorMutation(pass, sel)
 			}
-
-		case *ast.StarExpr:
-			if sel := resolveMutationTarget(pass, node, aliasMap); sel != nil {
-				handleSelectorMutation(pass, sel)
-			}
 		}
 	})
 
@@ -91,6 +98,10 @@ func run(pass *analysis.Pass) (any, error) {
 
 // buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty
 func buildProtectedStructMap() {
+	if len(ProtectedStructsMap) > 0 || protectAllStructs {
+		return
+	}
+
 	if EntityFile != "" {
 		for k := range loadEntityList(EntityFile) {
 			ProtectedStructsMap[k] = true
@@ -131,7 +142,7 @@ func trackAlias(pass *analysis.Pass, node *ast.AssignStmt, aliasMap map[types.Ob
 	}
 }
 
-// resolveMutationTarget centralizes allways an expression can represent a mutation target
+// resolveMutationTarget centralizes all ways an expression can represent a mutation target
 func resolveMutationTarget(pass *analysis.Pass, expr ast.Expr, aliasMap map[types.Object]*ast.SelectorExpr) *ast.SelectorExpr {
 	// Direct selector: e.Field or parentheses/star/unary wrapping
 	if sel := unwrapSelectorExpr(expr); sel != nil {
