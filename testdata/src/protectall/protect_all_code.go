@@ -198,6 +198,8 @@ func SomeFunc15() {
 	e.IntField = 10  // want "assignment to exported field Entity.IntField is forbidden outside its methods"
 	*(&e.IntField)++ // want "assignment to exported field Entity.IntField is forbidden outside its methods"
 	*(&e.IntField)-- // want "assignment to exported field Entity.IntField is forbidden outside its methods"
+	x := &e.IntField // want "assignment to exported field Entity.IntField is forbidden outside its methods"
+	*x = 20
 }
 
 func SomeFunc16() {

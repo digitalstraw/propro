@@ -29,6 +29,8 @@ var (
 func init() {
 	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to file listing protected structs")
 	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip test files")
+
+	// placeholder — populated from cfg in NewAnalyzer
 	flagSet.String("structs", "", "Comma-separated list of protected structs")
 }
 
@@ -56,6 +58,9 @@ func run(pass *analysis.Pass) (interface{}, error) {
 	seen = make(map[string]bool)
 	buildProtectedStructMap()
 
+	// aliasMap maps a variable (types.Object) to the selector it aliases, e.g. x := &e.Field
+	aliasMap := make(map[types.Object]*ast.SelectorExpr)
+
 	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 
 	insp.Preorder([]ast.Node{
@@ -63,9 +68,76 @@ func run(pass *analysis.Pass) (interface{}, error) {
 		(*ast.IncDecStmt)(nil),
 		(*ast.StarExpr)(nil),
 	}, func(n ast.Node) {
-		sel := extractSelectorFromNode(n)
-		if sel != nil {
-			handleSelectorMutation(pass, sel)
+		switch node := n.(type) {
+
+		// Assignments: capture aliasing (x := &e.F) and check direct lhs selectors (e.F = ...)
+		case *ast.AssignStmt:
+			// Track simple alias: x := &e.Field
+			if len(node.Lhs) == 1 && len(node.Rhs) == 1 {
+				if lhsIdent, ok := node.Lhs[0].(*ast.Ident); ok {
+					if unary, ok := node.Rhs[0].(*ast.UnaryExpr); ok && unary.Op == token.AND {
+						if sel := unwrapSelectorExpr(unary.X); sel != nil {
+							if obj := pass.TypesInfo.ObjectOf(lhsIdent); obj != nil {
+								aliasMap[obj] = sel
+							}
+						}
+					}
+				}
+			}
+
+			// Check each lhs for direct selector mutation: e.Field = ...
+			for _, lhs := range node.Lhs {
+				if sel := unwrapSelectorExpr(lhs); sel != nil {
+					handleSelectorMutation(pass, sel)
+				} else {
+					// also handle case: lhs is *x where x aliases selector (e.g. *x = ...)
+					if st, ok := lhs.(*ast.StarExpr); ok {
+						if id, ok := st.X.(*ast.Ident); ok {
+							if obj := pass.TypesInfo.ObjectOf(id); obj != nil {
+								if sel := aliasMap[obj]; sel != nil {
+									handleSelectorMutation(pass, sel)
+								}
+							}
+						}
+					}
+				}
+			}
+
+		// e.Field++ / e.Field-- and also *x++ when x aliases selector
+		case *ast.IncDecStmt:
+			// direct selector e.Field++ etc.
+			if sel := unwrapSelectorExpr(node.X); sel != nil {
+				handleSelectorMutation(pass, sel)
+				return
+			}
+			// *x++ where x is ident aliasing selector
+			if star, ok := node.X.(*ast.StarExpr); ok {
+				if id, ok := star.X.(*ast.Ident); ok {
+					if obj := pass.TypesInfo.ObjectOf(id); obj != nil {
+						if sel := aliasMap[obj]; sel != nil {
+							handleSelectorMutation(pass, sel)
+							return
+						}
+					}
+				}
+			}
+
+		// *( &e.Field ) = ... or *x = ... where x aliases selector
+		case *ast.StarExpr:
+			// Direct star of selector: *( &e.Field ) or *(&e.Field) -> unwrapSelectorExpr finds selector
+			if sel := unwrapSelectorExpr(node); sel != nil {
+				handleSelectorMutation(pass, sel)
+				return
+			}
+			// star of identifier: *x = ... resolve aliasMap[obj(x)]
+			if id, ok := node.X.(*ast.Ident); ok {
+				if obj := pass.TypesInfo.ObjectOf(id); obj != nil {
+					if sel := aliasMap[obj]; sel != nil {
+						handleSelectorMutation(pass, sel)
+						return
+					}
+				}
+			}
 		}
 	})
 
@@ -91,22 +163,6 @@ func buildProtectedStructMap() {
 	}
 }
 
-func extractSelectorFromNode(n ast.Node) *ast.SelectorExpr {
-	switch x := n.(type) {
-	case *ast.AssignStmt:
-		for _, lhs := range x.Lhs {
-			if s := unwrapSelectorExpr(lhs); s != nil {
-				return s
-			}
-		}
-	case *ast.IncDecStmt:
-		return unwrapSelectorExpr(x.X)
-	case *ast.StarExpr:
-		return unwrapSelectorExpr(x)
-	}
-	return nil
-}
-
 func unwrapSelectorExpr(expr ast.Expr) *ast.SelectorExpr {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
@@ -116,6 +172,7 @@ func unwrapSelectorExpr(expr ast.Expr) *ast.SelectorExpr {
 	case *ast.StarExpr:
 		return unwrapSelectorExpr(e.X)
 	case *ast.UnaryExpr:
+		// &x.Y
 		if e.Op == token.AND {
 			return unwrapSelectorExpr(e.X)
 		}
@@ -124,7 +181,7 @@ func unwrapSelectorExpr(expr ast.Expr) *ast.SelectorExpr {
 }
 
 func handleSelectorMutation(pass *analysis.Pass, sel *ast.SelectorExpr) {
-	if pass.TypesInfo == nil {
+	if pass.TypesInfo == nil || sel == nil {
 		return
 	}
 
@@ -162,11 +219,11 @@ func handleSelectorMutation(pass *analysis.Pass, sel *ast.SelectorExpr) {
 
 func deref(t types.Type) types.Type {
 	for {
-		p, ok := t.(*types.Pointer)
-		if !ok {
-			return t
+		if p, ok := t.(*types.Pointer); ok {
+			t = p.Elem()
+			continue
 		}
-		t = p.Elem()
+		return t
 	}
 }
 
@@ -266,7 +323,7 @@ func loadEntityList(filePath string) map[string]bool {
 
 		for _, spec := range gd.Specs {
 			vs, ok := spec.(*ast.ValueSpec)
-			if !ok || vs.Names[0].Name != "EntityList" {
+			if !ok || len(vs.Names) == 0 || vs.Names[0].Name != "EntityList" {
 				continue
 			}
 
