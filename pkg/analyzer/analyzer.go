@@ -20,6 +20,10 @@ const (
 	metaDoc           = "Detects writes to exported fields of protected structs outside methods"
 	metaURL           = "github.com/digitalstraw/propro"
 	entityListVarName = "EntityList"
+
+	// These must be identical to golangci-lint repo config keys.
+	entityListFileCfg = "entityListFile"
+	structsCfg        = "structs"
 )
 
 var (
@@ -30,14 +34,14 @@ var (
 	protectAllStructs   bool
 	seen                map[string]bool
 
-	ErrNotInspectAnalyzerError = errors.New("inspect analyzer result is not *inspector.Inspector")
+	ErrNotInspectAnalyzer = errors.New("inspect analyzer result is not *inspector.Inspector")
 
 	flagSet flag.FlagSet
 )
 
 func CliInit() {
-	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to file listing protected structs")
-	flagSet.Func("structs", "Comma-separated list of protected structs", func(s string) error {
+	flagSet.StringVar(&EntityFile, entityListFileCfg, "", "Path to file listing protected structs")
+	flagSet.Func(structsCfg, "Comma-separated list of protected structs", func(s string) error {
 		if s == "" {
 			return nil
 		}
@@ -53,10 +57,10 @@ func CliInit() {
 }
 
 func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
-	if v, ok := cfg["entityListFile"].(string); ok && v != "" {
+	if v, ok := cfg[entityListFileCfg].(string); ok && v != "" {
 		EntityFile = v
 	}
-	if v, ok := cfg["structs"].([]string); ok && len(v) > 0 {
+	if v, ok := cfg[structsCfg].([]string); ok && len(v) > 0 {
 		Structs = append(Structs, v...)
 	}
 
@@ -72,13 +76,40 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 	}
 }
 
+// buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty.
+func buildProtectedStructMap() {
+	if len(ProtectedStructsMap) > 0 || protectAllStructs {
+		// Concurrency expected: already built
+		return
+	}
+
+	ProtectedStructsMap = make(map[string]bool)
+
+	if EntityFile != "" {
+		for k := range loadEntityList(EntityFile) {
+			ProtectedStructsMap[k] = true
+		}
+	}
+
+	for _, s := range Structs {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			ProtectedStructsMap[s] = true
+		}
+	}
+
+	if len(ProtectedStructsMap) == 0 {
+		protectAllStructs = true
+	}
+}
+
 func run(pass *analysis.Pass) (any, error) {
 	seen = make(map[string]bool)
 
 	aliasMap := map[types.Object]*ast.SelectorExpr{}
 	insp, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	if !ok {
-		return nil, ErrNotInspectAnalyzerError
+		return nil, ErrNotInspectAnalyzer
 	}
 	inNodes := []ast.Node{
 		(*ast.AssignStmt)(nil),
@@ -103,32 +134,6 @@ func run(pass *analysis.Pass) (any, error) {
 	})
 
 	return nil, nil
-}
-
-// buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty.
-func buildProtectedStructMap() {
-	ProtectedStructsMap = make(map[string]bool)
-
-	if len(ProtectedStructsMap) > 0 || protectAllStructs {
-		return
-	}
-
-	if EntityFile != "" {
-		for k := range loadEntityList(EntityFile) {
-			ProtectedStructsMap[k] = true
-		}
-	}
-
-	for _, s := range Structs {
-		s = strings.TrimSpace(s)
-		if s != "" {
-			ProtectedStructsMap[s] = true
-		}
-	}
-
-	if len(ProtectedStructsMap) == 0 {
-		protectAllStructs = true
-	}
 }
 
 // trackAlias captures simple aliasing like: x := &e.Field.

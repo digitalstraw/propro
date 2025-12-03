@@ -67,15 +67,15 @@ func (e *Entity) SetProtectedField(value string) {
 }
 
 func SomeFunc1() {
-	e := &Entity{}
-	
+    e := &Entity{}
+    
     e.SetProtectedField(10) // OK
-    a := e.ProtectedField + 10; // OK
-	
+    a := e.ProtectedField + 10 // OK
+    
     e.ProtectedField = 10 // Error
     e.ProtectedField += 5 // Error
     e.ProtectedField++ // Error
-	*(&e.ProtectedField)-- // Error
+    *(&e.ProtectedField)-- // Error
     b := &e.ProtectedField // Error
 }
 ```

@@ -35,8 +35,8 @@ archives:
         format: zip
 release:
   github:
-    owner: godoc-lint
-    name: godoc-lint
+    owner: digitalstraw
+    name: propro
   footer: |2-
     ---
     Released by [GoReleaser](https://github.com/goreleaser/goreleaser).
