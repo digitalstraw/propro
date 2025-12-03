@@ -6,5 +6,6 @@ import (
 )
 
 func main() {
+	analyzer.CliInit()
 	singlechecker.Main(analyzer.NewAnalyzer(map[string]any{}))
 }

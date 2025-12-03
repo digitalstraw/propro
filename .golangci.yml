@@ -1,0 +1,169 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - asciicheck # checks for non-ASCII identifiers
+    - bidichk # checks for dangerous unicode character sequences
+    - bodyclose # checks whether HTTP response body is closed successfully.
+    - copyloopvar # checks for pointers to enclosing loop variables.
+    - cyclop # calculates cyclomatic complexities of functions or packages
+    - depguard # restricts usage of specified packages
+    - dogsled # finds assignments/declarations with too many blank identifiers
+    - dupl # detects code clones
+    - durationcheck # detect cases where two app.Duration values are being multiplied in possibly erroneous ways
+    - err113 # checks the errors handling expressions.
+    - errcheck # finds unchecked errors
+    - errname # checks that sentinel errors are prefixed with the Err and error types are suffixed with the Error
+    - errorlint # finds code that will cause problems with the error wrapping scheme introduced in Go 1.13.
+    - exhaustive # check exhaustiveness of enum switch statements.
+    - forcetypeassert # finds forced type assertions.
+    - funlen # checks that functions are not too long
+    - gocheckcompilerdirectives # validates go: compiler directives
+    - gocognit # calculates cognitive complexities of functions
+    - goconst # finds repeated strings that could be constants
+    - gocritic # provides diagnostics that check for bugs, performance and style issues.
+    - godot # check if comments end in a period.
+    - godox # detects FIXME, TODO and other comment markers
+    - gomoddirectives # manages the use of 'replace', 'retract', and 'exclude' directives in go.mod.
+    - gomodguard # allow and block list linter for direct Go module dependencies.
+    - goprintffuncname # checks that printf-like functions are named with f at the end.
+    - gosec # inspects source code for security problems.
+    - govet # reports suspicious constructs, such as Printf calls whose arguments do not align with the format string.
+    - importas # enforces consistent import aliases.
+    - ineffassign # detects when assignments to existing variables are not used.
+    - intrange # checks for loops with incorrect integer ranges
+    - lll # reports long lines
+    - makezero # finds slice declarations with non-zero initial length.
+    - misspell # finds commonly misspelled English words in comments.
+    - mnd # detects magic numbers
+    - nakedret # finds naked returns in functions greater than a specified function length.
+    - nilerr # finds code that returns nil even if it checks that the error is not nil.
+    - noctx # finds sending HTTP request without context.Context.
+    - nolintlint # reports ill-formed or insufficient nolint directives.
+    - prealloc # finds slice declarations that could potentially be pre-allocated.
+    - predeclared # finds code that shadows one of Go's predeclared identifiers.
+    - promlinter # checks Prometheus metrics naming via promlint.
+    - revive # linter for Go. Drop-in replacement of golint.
+    - rowserrcheck # checks whether Err of rows is checked successfully.
+    - sqlclosecheck # checks that sql.Rows and sql.Stmt are closed.
+    - staticcheck # set of rules from staticcheck
+    - testifylint # lints usage of testify
+    - thelper # detects Go test helpers without t.Helper() call and checks the consistency of test helpers.
+    - unconvert # removes unnecessary type conversions.
+    - unparam # reports unused function parameters.
+    - unused # checks Go code for unused constants, variables, functions and types.
+    - wastedassign # finds wasted assignment statements.
+    - whitespace # detection of leading and trailing whitespace.
+
+  settings:
+    depguard:
+      rules:
+        logger:
+          deny:
+            # logging is allowed only by logutils.Log,
+            - pkg: "github.com/sirupsen/logrus"
+              desc: logging is allowed only by logutils.Log.
+            - pkg: "github.com/pkg/errors"
+              desc: Should be replaced by standard lib errors package.
+            - pkg: "github.com/instana/testify"
+              desc: It's a fork of github.com/stretchr/testify.
+          files:
+            # logrus is allowed to use only in logutils package.
+            - "!**/pkg/logutils/**.go"
+    dupl:
+      threshold: 250
+    funlen:
+      lines: -1 # the number of lines (code + empty lines) is not a right metric and leads to code without empty line or one-liner.
+      statements: 50
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+      disabled-checks:
+        - dupImport # https://github.com/go-critic/go-critic/issues/845
+        - ifElseChain
+        - octalLiteral
+        - whyNoLint
+    cyclop:
+      max-complexity: 25
+    godox:
+      keywords:
+        - FIXME
+    mnd:
+      # don't include the "operation" and "assign"
+      checks:
+        - argument
+        - case
+        - condition
+        - return
+      ignored-numbers:
+        - '0'
+        - '1'
+        - '2'
+        - '3'
+      ignored-functions:
+        - strings.SplitN
+    govet:
+      settings:
+        printf:
+          funcs:
+            - (github.com/golangci/golangci-lint/v2/pkg/logutils.Log).Infof
+            - (github.com/golangci/golangci-lint/v2/pkg/logutils.Log).Warnf
+            - (github.com/golangci/golangci-lint/v2/pkg/logutils.Log).Errorf
+            - (github.com/golangci/golangci-lint/v2/pkg/logutils.Log).Fatalf
+      enable:
+        - nilness
+        - shadow
+    errorlint:
+      asserts: false
+    lll:
+      line-length: 140
+    misspell:
+      locale: US
+      ignore-rules:
+        - "importas" # linter name
+    nolintlint:
+      allow-unused: false # report any unused nolint directives
+      require-explanation: true # require an explanation for nolint directives
+      require-specific: true # require nolint directives to be specific about which linter is being skipped
+    revive:
+      rules:
+        - name: indent-error-flow
+        - name: unexported-return
+          disabled: true
+        - name: unused-parameter
+        - name: unused-receiver
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # Do not require package comments.
+        - -ST1003 # Do not require "HttpError should be HTTPError" or "NewRestApi should be NewRestAPI".
+        - -SA1029 # Do not require keys in context.WithValue() to have a custom dedicated type to prevent collisions.
+
+
+  exclusions:
+    paths:
+      - "(.+)_test\\.go"
+
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
+    goimports:
+      local-prefixes:
+        - github.com/golangci/golangci-lint/v2
+
+
