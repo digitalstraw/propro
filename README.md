@@ -16,7 +16,7 @@ boilerplate code because it requires writing and maintaining mapping logic for b
 This allows entities to keep exported fields and be used directly with GORM and JSON—without all the mapping boilerplate.
 
 ## Configuration
-- **`entityListFile`** may contain path to a go file containgin **`EntityList`** variable with the list of empty pointers to the protected structs.
+- **`entity-list-file`** may contain path to a go file containgin **`EntityList`** variable with the list of empty pointers to the protected structs.
   - Such a list is required for database migration purposes by ORM tools like GORM. 
   - Example content of such a go file:
     ```go
@@ -33,14 +33,13 @@ This allows entities to keep exported fields and be used directly with GORM and 
     ```yaml
     settings:
       propro:
+        entity-list-file: "path/to/entity_list.go"
         structs:
           - "User"
           - "Order"
     ```
 
-- **`skipTests`**: if set to true, the linter will skip test files.
-
-If both `entityListFile` and `structs` are specified, the union of the two sets is used.
+If both `entity-list-file` and `structs` are specified, the union of the two sets is used.
 If neither is specified, the linter **protects ALL STRUCTS**. If you don't want any structs to be protected, just disable the linter.
 
 
@@ -50,10 +49,9 @@ go get github.com/digitalstraw/propro/cmd/propro
 
 propro .
 ```
-Available parameters:
+Available CLI parameters:
 - `-entityListFile string` - path to a go file containing `EntityList` variable with the list of protected structs.
 - `-structs string` - comma-separated list of struct names to be protected.
-- `-skipTests bool` - if set, test files will be skipped. `false` by default.
 
 
 ## Code Examples
