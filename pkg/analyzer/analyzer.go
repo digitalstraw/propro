@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -14,24 +15,28 @@ import (
 	"golang.org/x/tools/go/ast/inspector"
 )
 
-const entityListVarName = "EntityList"
+const (
+	metaName          = "propro"
+	metaDoc           = "Detects writes to exported fields of protected structs outside methods"
+	metaURL           = "github.com/digitalstraw/propro"
+	entityListVarName = "EntityList"
+)
 
 var (
 	EntityFile string
 	Structs    []string
-	SkipTests  bool
 
-	ProtectedStructsMap = map[string]bool{}
+	ProtectedStructsMap map[string]bool
 	protectAllStructs   bool
 	seen                map[string]bool
+
+	ErrNotInspectAnalyzerError = errors.New("inspect analyzer result is not *inspector.Inspector")
 
 	flagSet flag.FlagSet
 )
 
-func init() {
+func CliInit() {
 	flagSet.StringVar(&EntityFile, "entityListFile", "", "Path to file listing protected structs")
-	flagSet.BoolVar(&SkipTests, "skipTests", false, "Skip test files")
-
 	flagSet.Func("structs", "Comma-separated list of protected structs", func(s string) error {
 		if s == "" {
 			return nil
@@ -54,15 +59,13 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 	if v, ok := cfg["structs"].([]string); ok && len(v) > 0 {
 		Structs = append(Structs, v...)
 	}
-	if v, ok := cfg["skipTests"].(bool); ok {
-		SkipTests = v
-	}
 
 	buildProtectedStructMap()
 
 	return &analysis.Analyzer{
-		Name:     "propro",
-		Doc:      "Detects writes to exported fields of protected structs outside methods",
+		Name:     metaName,
+		Doc:      metaDoc,
+		URL:      metaURL,
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 		Flags:    flagSet,
 		Run:      run,
@@ -73,8 +76,14 @@ func run(pass *analysis.Pass) (any, error) {
 	seen = make(map[string]bool)
 
 	aliasMap := map[types.Object]*ast.SelectorExpr{}
-	insp := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-	inNodes := []ast.Node{(*ast.AssignStmt)(nil), (*ast.IncDecStmt)(nil), (*ast.StarExpr)(nil)}
+	insp, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+	if !ok {
+		return nil, ErrNotInspectAnalyzerError
+	}
+	inNodes := []ast.Node{
+		(*ast.AssignStmt)(nil),
+		(*ast.IncDecStmt)(nil),
+	}
 
 	insp.Preorder(inNodes, func(n ast.Node) {
 		switch node := n.(type) {
@@ -96,8 +105,10 @@ func run(pass *analysis.Pass) (any, error) {
 	return nil, nil
 }
 
-// buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty
+// buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty.
 func buildProtectedStructMap() {
+	ProtectedStructsMap = make(map[string]bool)
+
 	if len(ProtectedStructsMap) > 0 || protectAllStructs {
 		return
 	}
@@ -120,7 +131,7 @@ func buildProtectedStructMap() {
 	}
 }
 
-// trackAlias captures simple aliasing like: x := &e.Field
+// trackAlias captures simple aliasing like: x := &e.Field.
 func trackAlias(pass *analysis.Pass, node *ast.AssignStmt, aliasMap map[types.Object]*ast.SelectorExpr) {
 	if len(node.Lhs) != 1 || len(node.Rhs) != 1 {
 		return
@@ -142,7 +153,7 @@ func trackAlias(pass *analysis.Pass, node *ast.AssignStmt, aliasMap map[types.Ob
 	}
 }
 
-// resolveMutationTarget centralizes all ways an expression can represent a mutation target
+// resolveMutationTarget centralizes all ways an expression can represent a mutation target.
 func resolveMutationTarget(pass *analysis.Pass, expr ast.Expr, aliasMap map[types.Object]*ast.SelectorExpr) *ast.SelectorExpr {
 	// Direct selector: e.Field or parentheses/star/unary wrapping
 	if sel := unwrapSelectorExpr(expr); sel != nil {
@@ -165,7 +176,7 @@ func resolveMutationTarget(pass *analysis.Pass, expr ast.Expr, aliasMap map[type
 	return nil
 }
 
-// handleSelectorMutation validates selector and reports if it's a forbidden mutation
+// handleSelectorMutation validates selector and reports if it's a forbidden mutation.
 func handleSelectorMutation(pass *analysis.Pass, sel *ast.SelectorExpr) {
 	structName, fieldName, protectionViolated := guardProtectedFieldMutation(pass, sel)
 	if !protectionViolated {
@@ -174,13 +185,13 @@ func handleSelectorMutation(pass *analysis.Pass, sel *ast.SelectorExpr) {
 	reportIssue(pass, sel.Pos(), structName, fieldName)
 }
 
-// guardProtectedFieldMutation does the heavy checks: exported, protected struct, embedded, method
-func guardProtectedFieldMutation(pass *analysis.Pass, sel *ast.SelectorExpr) (string, string, bool) {
+// guardProtectedFieldMutation does the heavy checks: exported, protected struct, embedded, method.
+func guardProtectedFieldMutation(pass *analysis.Pass, sel *ast.SelectorExpr) (structName, fieldName string, protectionViolated bool) {
 	if pass.TypesInfo == nil || sel == nil {
 		return "", "", false
 	}
 
-	fieldName := sel.Sel.Name
+	fieldName = sel.Sel.Name
 	if !ast.IsExported(fieldName) {
 		return "", "", false
 	}
@@ -195,13 +206,13 @@ func guardProtectedFieldMutation(pass *analysis.Pass, sel *ast.SelectorExpr) (st
 	if !ok {
 		return "", "", false
 	}
-	structName := named.Obj().Name()
+	structName = named.Obj().Name()
 
 	if !protectAllStructs && !ProtectedStructsMap[structName] {
 		return "", "", false
 	}
 
-	if isEmbeddedField(pass, sel, structName, fieldName) {
+	if isEmbeddedField(pass, sel, fieldName) {
 		return "", "", false
 	}
 
@@ -212,6 +223,7 @@ func guardProtectedFieldMutation(pass *analysis.Pass, sel *ast.SelectorExpr) (st
 	return structName, fieldName, true
 }
 
+// deref peels pointer types to get the base type.
 func deref(t types.Type) types.Type {
 	for {
 		if p, ok := t.(*types.Pointer); ok {
@@ -222,6 +234,7 @@ func deref(t types.Type) types.Type {
 	}
 }
 
+// insideStructMethod checks if the position is inside a method of the given struct.
 func insideStructMethod(pass *analysis.Pass, pos token.Pos, structName string) bool {
 	fn := findEnclosingFunc(pass, pos)
 	if fn == nil || fn.Recv == nil {
@@ -235,6 +248,7 @@ func insideStructMethod(pass *analysis.Pass, pos token.Pos, structName string) b
 	return false
 }
 
+// findEnclosingFunc finds the function declaration enclosing the given position.
 func findEnclosingFunc(pass *analysis.Pass, pos token.Pos) *ast.FuncDecl {
 	for _, file := range pass.Files {
 		var found *ast.FuncDecl
@@ -253,10 +267,12 @@ func findEnclosingFunc(pass *analysis.Pass, pos token.Pos) *ast.FuncDecl {
 	return nil
 }
 
+// isSameStructType checks if the type matches the named struct.
 func isSameStructType(t types.Type, structName string) bool {
 	return namedTypeName(deref(t)) == structName
 }
 
+// namedTypeName returns the name of the named type, or empty string.
 func namedTypeName(t types.Type) string {
 	if n, ok := t.(*types.Named); ok {
 		return n.Obj().Name()
@@ -264,7 +280,8 @@ func namedTypeName(t types.Type) string {
 	return ""
 }
 
-func isEmbeddedField(pass *analysis.Pass, sel *ast.SelectorExpr, structName, fieldName string) bool {
+// isEmbeddedField checks if the field is embedded in the struct.
+func isEmbeddedField(pass *analysis.Pass, sel *ast.SelectorExpr, fieldName string) bool {
 	t := deref(pass.TypesInfo.TypeOf(sel.X))
 	n, ok := t.(*types.Named)
 	if !ok {
@@ -276,7 +293,7 @@ func isEmbeddedField(pass *analysis.Pass, sel *ast.SelectorExpr, structName, fie
 		return false
 	}
 
-	for i := 0; i < s.NumFields(); i++ {
+	for i := range s.NumFields() {
 		f := s.Field(i)
 		if f.Embedded() && f.Name() == fieldName {
 			return true
@@ -285,6 +302,7 @@ func isEmbeddedField(pass *analysis.Pass, sel *ast.SelectorExpr, structName, fie
 	return false
 }
 
+// reportIssue reports the forbidden mutation if not already reported.
 func reportIssue(pass *analysis.Pass, pos token.Pos, structName, fieldName string) {
 	key := fmt.Sprintf("%s.%s.%d", structName, fieldName, pos)
 	if seen[key] {
@@ -295,7 +313,7 @@ func reportIssue(pass *analysis.Pass, pos token.Pos, structName, fieldName strin
 	pass.Reportf(pos, "assignment to exported field %s.%s is forbidden outside its methods", structName, fieldName)
 }
 
-// loadEntityList reads a file containing a var EntityList = []Type{...}
+// loadEntityList reads a file containing a var EntityList = []Type{...}.
 func loadEntityList(filePath string) map[string]bool {
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, filePath, nil, parser.AllErrors)
@@ -331,6 +349,7 @@ func loadEntityList(filePath string) map[string]bool {
 	return out
 }
 
+// extractTypeName extracts the type name from an expression.
 func extractTypeName(expr ast.Expr) string {
 	switch e := expr.(type) {
 	case *ast.CompositeLit:
@@ -346,7 +365,7 @@ func extractTypeName(expr ast.Expr) string {
 	return ""
 }
 
-// unwrapSelectorExpr peels parentheses, pointer and address-of to find selector expressions
+// unwrapSelectorExpr peels parentheses, pointer and address-of to find selector expressions.
 func unwrapSelectorExpr(expr ast.Expr) *ast.SelectorExpr {
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:

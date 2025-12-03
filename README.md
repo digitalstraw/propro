@@ -1,5 +1,9 @@
 # propro
 
+[![Release](https://img.shields.io/github/v/release/digitalstraw/propro)](https://github.com/digitalstraw/propro/releases)
+[![License](https://img.shields.io/github/license/digitalstraw/propro)](/LICENSE)
+[![CI](https://github.com/digitalstraw/propro/actions/workflows/ci.yaml/badge.svg)](https://github.com/digitalstraw/propro/actions/workflows/ci.yaml)
+
 `propro` is an abbreviation of Protected Properties. It prevents direct writes to public/exported struct properties.
 
 ## Why propro?
@@ -55,7 +59,7 @@ Available parameters:
 ## Code Examples
 ```go
 type Entity struct {
-	ProtectedField       string
+	ProtectedField int
 }
 
 func (e *Entity) SetProtectedField(value string) {
@@ -64,7 +68,14 @@ func (e *Entity) SetProtectedField(value string) {
 
 func SomeFunc1() {
 	e := &Entity{}
-	e.SetProtectedField("value") // OK
-	e.ProtectedField = "value" // Error
+	
+    e.SetProtectedField(10) // OK
+    a := e.ProtectedField + 10; // OK
+	
+    e.ProtectedField = 10 // Error
+    e.ProtectedField += 5 // Error
+    e.ProtectedField++ // Error
+	*(&e.ProtectedField)-- // Error
+    b := &e.ProtectedField // Error
 }
 ```
