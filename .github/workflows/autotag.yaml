@@ -79,6 +79,10 @@ jobs:
       - name: Push new tag
         run: |
           NEW_TAG=${{ steps.bump.outputs.new_tag }}
-          git tag "$NEW_TAG"
-          git push origin "$NEW_TAG"
-          echo "Pushed tag $NEW_TAG"
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists. Skipping creation and push."
+          else
+            git tag "$NEW_TAG"
+            git push origin "$NEW_TAG"
+            echo "Pushed tag $NEW_TAG"
+          fi
