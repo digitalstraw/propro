@@ -24,12 +24,6 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Install GitHub CLI
-        run: |
-          sudo apt update
-          sudo apt install -y gh
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
       - name: Get latest tag
         id: get_tag
         run: |
@@ -40,19 +34,20 @@ jobs:
         id: bump_type
         run: |
           BRANCH="${{ github.event.workflow_run.head_branch }}"
+          bump="patch"
 
           # Get PR number associated with the branch
-          PR_NUMBER=$(gh pr list --head "$BRANCH" --state merged --json number --jq '.[0].number')
-
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state merged --sort updated --limit 1 --json number --jq '.[0].number')
+          
           if [ -z "$PR_NUMBER" ]; then
-            echo "No PR found for branch $BRANCH. Defaulting bump to patch."
-            bump="patch"
+            echo "No PR found for branch $BRANCH. This may be a direct push to main. Defaulting to patch version bump (semantic versioning)."            bump="patch"
           else
             # Get PR title
             PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
-
-            bump="patch"
-
+            if [ -z "$PR_TITLE" ]; then
+              echo "Warning: Found PR #$PR_NUMBER but could not retrieve title. Defaulting to patch."
+            fi
+          
             if echo "$PR_TITLE" | grep -qiE "^chore"; then
               bump="none"
             elif echo "$PR_TITLE" | grep -qiE "^breaking"; then
