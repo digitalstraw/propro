@@ -94,3 +94,11 @@ jobs:
             git push origin "$NEW_TAG"
             echo "Pushed tag $NEW_TAG"
           fi
+
+      - name: Create GitHub Release
+        if: steps.bump_type.outputs.bump_type != 'none'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump.outputs.new_tag }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
