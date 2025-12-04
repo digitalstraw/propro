@@ -30,22 +30,33 @@ jobs:
           TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           echo "latest=$TAG" >> $GITHUB_OUTPUT
 
-      - name: Determine bump type
+      - name: Determine bump type from PR title
         id: bump_type
         run: |
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          MSG=$(git log -1 --pretty=%B "$SHA")
-
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
           bump="patch"
 
-          if echo "$MSG" | grep -qiE "^chore"; then
-            bump="none"
-          elif echo "$MSG" | grep -qiE "^breaking"; then
-            bump="major"
-          elif echo "$MSG" | grep -qiE "^new"; then
-            bump="minor"
-          elif echo "$MSG" | grep -qiE "^fix"; then
-            bump="patch"
+          # Get PR number associated with the branch
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state merged --sort updated --limit 1 --json number --jq '.[0].number')
+          
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR found for branch $BRANCH. This may be a direct push to main. Defaulting to patch version bump (semantic versioning)."            bump="patch"
+          else
+            # Get PR title
+            PR_TITLE=$(gh pr view "$PR_NUMBER" --json title --jq '.title')
+            if [ -z "$PR_TITLE" ]; then
+              echo "Warning: Found PR #$PR_NUMBER but could not retrieve title. Defaulting to patch."
+            fi
+          
+            if echo "$PR_TITLE" | grep -qiE "^chore"; then
+              bump="none"
+            elif echo "$PR_TITLE" | grep -qiE "^breaking"; then
+              bump="major"
+            elif echo "$PR_TITLE" | grep -qiE "^new"; then
+              bump="minor"
+            elif echo "$PR_TITLE" | grep -qiE "^fix"; then
+              bump="patch"
+            fi
           fi
 
           echo "bump_type=$bump" >> $GITHUB_OUTPUT
@@ -53,7 +64,7 @@ jobs:
       - name: Skip if bump_type is none
         if: steps.bump_type.outputs.bump_type == 'none'
         run: |
-          echo "Chore commit detected — skipping version tagging."
+          echo "Chore PR detected — skipping version tagging."
 
       - name: Bump version
         if: steps.bump_type.outputs.bump_type != 'none'
