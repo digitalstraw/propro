@@ -1,0 +1,89 @@
+name: Auto semantic version tag
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: autotag
+  cancel-in-progress: false
+
+jobs:
+  semver:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Get latest tag
+        id: get_tag
+        run: |
+          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Determine bump type
+        id: bump_type
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          MSG=$(git log -1 --pretty=%B "$SHA")
+
+          bump="patch"
+
+          if echo "$MSG" | grep -qiE "^Breaking:"; then
+            bump="major"
+          elif echo "$MSG" | grep -qiE "^New:"; then
+            bump="minor"
+          elif echo "$MSG" | grep -qiE "^Fix:"; then
+            bump="patch"
+          fi
+
+          echo "bump_type=$bump" >> $GITHUB_OUTPUT
+
+      - name: Bump version
+        id: bump
+        run: |
+          TAG=${{ steps.get_tag.outputs.latest }}
+          TYPE=${{ steps.bump_type.outputs.bump_type }}
+          VERSION=${TAG#v}
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          case "$TYPE" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_TAG="v$MAJOR.$MINOR.$PATCH"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+      - name: Push new tag
+        run: |
+          NEW_TAG=${{ steps.bump.outputs.new_tag }}
+          if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
+            echo "Tag $NEW_TAG already exists. Skipping creation and push."
+          else
+            git tag "$NEW_TAG"
+            git push origin "$NEW_TAG"
+            echo "Pushed tag $NEW_TAG"
+          fi
