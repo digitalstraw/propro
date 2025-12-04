@@ -37,7 +37,7 @@ jobs:
           bump="patch"
 
           # Get PR number associated with the branch
-          PR_NUMBER=$(gh pr list --head "$BRANCH" --state merged --sort updated --limit 1 --json number --jq '.[0].number')
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --state merged --limit 1 --json number --jq '.[0].number')
           
           if [ -z "$PR_NUMBER" ]; then
             echo "No PR found for branch $BRANCH. This may be a direct push to main. Defaulting to patch version bump (semantic versioning)."            bump="patch"
