@@ -32,6 +32,8 @@ jobs:
 
       - name: Determine bump type from PR title
         id: bump_type
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           bump="patch"
