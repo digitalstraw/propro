@@ -46,6 +46,7 @@ If neither is specified, the linter **protects ALL STRUCTS**. If you don't want 
 ## Usage
 ```bash
 go get github.com/digitalstraw/propro/cmd/propro
+go build -o propro cmd/propro/main.go
 
 propro .
 ```
