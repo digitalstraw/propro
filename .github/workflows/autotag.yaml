@@ -14,9 +14,7 @@ concurrency:
 
 jobs:
   semver:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'main'
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
@@ -38,7 +36,6 @@ jobs:
           SHA="${{ github.event.workflow_run.head_sha }}"
           MSG=$(git log -1 --pretty=%B "$SHA")
 
-          # default bump type (patch), overridden below
           bump="patch"
 
           if echo "$MSG" | grep -qiE "^chore"; then
