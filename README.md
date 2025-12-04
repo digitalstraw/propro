@@ -78,3 +78,15 @@ func SomeFunc1() {
     b := &e.ProtectedField // Error
 }
 ```
+
+## Pull Requests
+- Feel free to open pull requests for bug fixes and new features.
+- Use semantic versioning for commit messages and PR title.
+- Final semantic decision on versioning is taken from the PR title which is created from the commit message.
+- Use the following prefixes for commit messages:
+  - `Fix:` for bug fixes -> bumps patch version
+  - `New:` for new features -> bumps minor version
+  - `Breaking:` for breaking changes -> bumps major version
+  - `Chore:` for changes that do not modify src or test files
+  - anything else will be considered as `Fix:`
+  - Note: prefixes are case-insensitive and does not have to be followed by colon.
