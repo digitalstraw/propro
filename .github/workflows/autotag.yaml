@@ -3,8 +3,7 @@ name: Auto semantic version tag
 on:
   workflow_run:
     workflows: ["CI"]
-    types:
-      - completed
+    types: [completed]
 
 permissions:
   contents: write
@@ -22,9 +21,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Get latest tag
         id: get_tag
@@ -35,11 +35,8 @@ jobs:
       - name: Determine bump type
         id: bump_type
         run: |
-          # Get full commit message from the CI run head SHA
           SHA="${{ github.event.workflow_run.head_sha }}"
           MSG=$(git log -1 --pretty=%B "$SHA")
-
-          echo "Commit message: $MSG"
 
           bump="patch"
 
