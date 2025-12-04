@@ -38,19 +38,28 @@ jobs:
           SHA="${{ github.event.workflow_run.head_sha }}"
           MSG=$(git log -1 --pretty=%B "$SHA")
 
+          # default bump type (patch), overridden below
           bump="patch"
 
-          if echo "$MSG" | grep -qiE "^Breaking:"; then
+          if echo "$MSG" | grep -qiE "^chore"; then
+            bump="none"
+          elif echo "$MSG" | grep -qiE "^breaking"; then
             bump="major"
-          elif echo "$MSG" | grep -qiE "^New:"; then
+          elif echo "$MSG" | grep -qiE "^new"; then
             bump="minor"
-          elif echo "$MSG" | grep -qiE "^Fix:"; then
+          elif echo "$MSG" | grep -qiE "^fix"; then
             bump="patch"
           fi
 
           echo "bump_type=$bump" >> $GITHUB_OUTPUT
 
+      - name: Skip if bump_type is none
+        if: steps.bump_type.outputs.bump_type == 'none'
+        run: |
+          echo "Chore commit detected — skipping version tagging."
+
       - name: Bump version
+        if: steps.bump_type.outputs.bump_type != 'none'
         id: bump
         run: |
           TAG=${{ steps.get_tag.outputs.latest }}
@@ -78,6 +87,7 @@ jobs:
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Push new tag
+        if: steps.bump_type.outputs.bump_type != 'none'
         run: |
           NEW_TAG=${{ steps.bump.outputs.new_tag }}
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
