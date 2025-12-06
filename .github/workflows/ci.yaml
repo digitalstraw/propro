@@ -24,7 +24,12 @@ jobs:
         run: go build -v ./cmd/...
       - name: test
         shell: bash
-        run: go test -v -count=1 ./...
+        run: go test -v -count=1 -covermode=atomic -coverprofile=coverage.out ./...
+      - name: Report Coveralls
+        uses: coverallsapp/github-action@v2
+        with:
+          file: coverage.out
+          github-token: '${{ secrets.COVERALLS_REPO_TOKEN }}'
 
   lint:
     name: lint
