@@ -23,7 +23,7 @@ func TestWithEntityFileParameter(t *testing.T) {
 	testdata := setUp()
 
 	cfg := map[string]any{
-		"entityListFile": filepath.Join(testdata, "src/config/entities.go"),
+		entityListFileArg: filepath.Join(testdata, "src/config/entities.go"),
 	}
 
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
@@ -33,7 +33,7 @@ func TestWithStructsParameter(t *testing.T) {
 	testdata := setUp()
 	cfg := map[string]any{
 		// contains UnProtectedEntity to test that only specified structs are protected
-		"structs": []string{"Entity", "SubEntity"},
+		structsArg: []string{"Entity", "SubEntity"},
 	}
 
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
@@ -43,8 +43,8 @@ func TestWithEntityFileAndStructsWithOverlap(t *testing.T) {
 	testdata := setUp()
 	cfg := map[string]any{
 		// contains UnProtectedEntity to test that only specified structs are protected
-		"entityListFile": filepath.Join(testdata, "src/config/entities.go"),
-		"structs":        []string{"Entity", "SubEntity"},
+		entityListFileArg: filepath.Join(testdata, "src/config/entities.go"),
+		structsArg:        []string{"Entity", "SubEntity"},
 	}
 
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
@@ -54,11 +54,27 @@ func TestWithEntityFileAndStructsComposed(t *testing.T) {
 	testdata := setUp()
 	cfg := map[string]any{
 		// contains UnProtectedEntity to test that only specified structs are protected
-		"entityListFile": filepath.Join(testdata, "src/config2/entities.go"), // Entity
-		"structs":        []string{"SubEntity"},
+		entityListFileArg: filepath.Join(testdata, "src/config2/entities.go"), // Entity
+		structsArg:        []string{"SubEntity"},
 	}
 
+	// Test twice to simulate concurrent runs which reuse already set up configuration.
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
+}
+
+func TestWithEntityFileWhichDoesNotCompile(t *testing.T) {
+	testdata := setUp()
+	cfg := map[string]any{
+		entityListFileArg: filepath.Join(testdata, "src/config3/entities.go.txt"),
+		structsArg: []string{
+			"UnProtectedEntity", "Entity", "SubEntity", "Entity2", "SubEntity2", "SubSubEntity2",
+			"Entity3", "SubEntity3", "SubSubEntity3", "Entity4", "SubEntity4", "SubSubEntity4",
+			"RepositoryImpl", "SubEntityWithPtrComposition", "SubEntityWithComposition",
+		},
+	}
+
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectall")
 }
 
 func TestWithNoParameters_allStructsAreProtected(t *testing.T) {
@@ -66,4 +82,21 @@ func TestWithNoParameters_allStructsAreProtected(t *testing.T) {
 
 	// UnProtectedEntity WILL also be protected in this test
 	analysistest.Run(t, testdata, NewAnalyzer(map[string]any{}), "protectall")
+}
+
+func TestCliInit(t *testing.T) {
+	_ = setUp()
+
+	args := make([]string, 0)
+	args = append(args, "-"+structsArg+"=   Entity   ,   Entity2")
+	args = append(args, "-"+entityListFileArg+"=      /path/to/file.go    ")
+
+	CliInit(args)
+
+	if len(Structs) != 2 || Structs[0] != "Entity" || Structs[1] != "Entity2" {
+		t.Errorf("CliInit did not set Structs correctly, got: %v", Structs)
+	}
+	if EntityFile != "/path/to/file.go" {
+		t.Errorf("CliInit did not set EntityFile correctly, got: %s", EntityFile)
+	}
 }

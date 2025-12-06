@@ -8,6 +8,7 @@ type Entity struct {
 	SubEntityViaProperty *SubEntity
 	ProtectedField       string
 	IntField             int
+	IntPtrField          *int
 }
 
 func (e *Entity) SubEntity() *SubEntity {
@@ -200,6 +201,7 @@ func SomeFunc15() {
 	e.IntField /= 10 // want "assignment to exported field Entity.IntField is forbidden outside its methods"
 	x := &e.IntField // want "assignment to exported field Entity.IntField is forbidden outside its methods"
 	*x = 20
+	e.IntPtrField = new(int) // want "assignment to exported field Entity.IntPtrField is forbidden outside its methods"
 
 	y := e.IntField + 10
 	_ = y

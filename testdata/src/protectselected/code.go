@@ -8,7 +8,10 @@ type UnProtectedEntity struct {
 
 type Entity struct {
 	SubEntityViaProperty *SubEntity
-	ProtectedField       string
+
+	ProtectedField string
+	IntPtrField    *int
+	unexported     string
 }
 
 func (e *Entity) SubEntity() *SubEntity {
@@ -45,6 +48,8 @@ var repo Repository = &RepositoryImpl{}
 
 func (e *Entity) SetProtectedField(value string) {
 	e.ProtectedField = value
+	e.unexported = "a"
+	SomeFunc2()
 }
 
 func SomeFunc1() {
@@ -114,4 +119,60 @@ func SomeFunc10() {
 	*(&e.IntField)--
 	e.IntPtrField = new(int)
 	*e.IntPtrField = 20
+}
+
+func SomeFunc11() {
+	e := &Entity{}
+	_ = func() {
+		e.ProtectedField = "value" // want "assignment to exported field Entity.ProtectedField is forbidden outside its methods"
+	}
+	var (
+		_ = func() {
+			e.ProtectedField = "value" // want "assignment to exported field Entity.ProtectedField is forbidden outside its methods"
+		}
+	)
+	go func() {
+		e.ProtectedField = "value" // want "assignment to exported field Entity.ProtectedField is forbidden outside its methods"
+	}()
+}
+
+func SomeFunc12() {
+	e := &Entity{}
+	PtrFunc(e.IntPtrField) // want "assignment to exported field Entity.IntPtrField is forbidden outside its methods"
+
+	_ = e.IntPtr() // this must remain allowed as it's a getter
+}
+
+func PtrFunc(i *int) {
+	*i = 10
+}
+
+func (e *Entity) IntPtr() *int {
+	return e.IntPtrField
+}
+
+func SomeFunc13() {
+	ch := make(chan *int)
+	e := &Entity{IntPtrField: new(int)}
+
+	go func() {
+		p := <-ch
+		*p = 55
+	}()
+
+	ch <- e.IntPtrField // Edge case: left allowed.
+}
+
+func SomeFunc14() {
+	e := &Entity{IntPtrField: new(int)}
+	var v interface{} = e
+	if ee, ok := v.(*Entity); ok {
+		*ee.IntPtrField = 101 // want "assignment to exported field Entity.IntPtrField is forbidden outside its methods"
+	}
+}
+
+func SomeFunc15() {
+	e := &Entity{IntPtrField: new(int)}
+	s := []*int{e.IntPtrField} // Edge case: left allowed.
+	*s[0] = 11
 }

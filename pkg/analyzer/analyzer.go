@@ -22,8 +22,8 @@ const (
 	entityListVarName = "EntityList"
 
 	// These must be identical to golangci-lint repo config keys.
-	entityListFileCfg = "entityListFile"
-	structsCfg        = "structs"
+	entityListFileArg = "entityListFile"
+	structsArg        = "structs"
 )
 
 var (
@@ -39,28 +39,33 @@ var (
 	flagSet flag.FlagSet
 )
 
-func CliInit() {
-	flagSet.StringVar(&EntityFile, entityListFileCfg, "", "Path to file listing protected structs")
-	flagSet.Func(structsCfg, "Comma-separated list of protected structs", func(s string) error {
-		if s == "" {
-			return nil
+func CliInit(args []string) {
+	structs := ""
+
+	flagSet.StringVar(&EntityFile, entityListFileArg, "", "Path to file listing protected structs")
+	flagSet.StringVar(&structs, structsArg, "", "Comma-separated list of protected structs")
+
+	err := flagSet.Parse(args)
+	if err != nil {
+		return
+	}
+
+	EntityFile = strings.TrimSpace(EntityFile)
+
+	parts := strings.Split(structs, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			Structs = append(Structs, part)
 		}
-		parts := strings.Split(s, ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				Structs = append(Structs, part)
-			}
-		}
-		return nil
-	})
+	}
 }
 
 func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
-	if v, ok := cfg[entityListFileCfg].(string); ok && v != "" {
+	if v, ok := cfg[entityListFileArg].(string); ok && v != "" {
 		EntityFile = v
 	}
-	if v, ok := cfg[structsCfg].([]string); ok && len(v) > 0 {
+	if v, ok := cfg[structsArg].([]string); ok && len(v) > 0 {
 		Structs = append(Structs, v...)
 	}
 
@@ -105,35 +110,63 @@ func buildProtectedStructMap() {
 
 func run(pass *analysis.Pass) (any, error) {
 	seen = make(map[string]bool)
-
 	aliasMap := map[types.Object]*ast.SelectorExpr{}
+
 	insp, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
 	if !ok {
 		return nil, ErrNotInspectAnalyzer
 	}
+
 	inNodes := []ast.Node{
 		(*ast.AssignStmt)(nil),
 		(*ast.IncDecStmt)(nil),
+		(*ast.CallExpr)(nil),
 	}
 
 	insp.Preorder(inNodes, func(n ast.Node) {
 		switch node := n.(type) {
 		case *ast.AssignStmt:
-			trackAlias(pass, node, aliasMap)
-			for _, lhs := range node.Lhs {
-				if sel := resolveMutationTarget(pass, lhs, aliasMap); sel != nil {
-					handleSelectorMutation(pass, sel)
-				}
-			}
-
+			handleAssignStmt(pass, node, aliasMap)
 		case *ast.IncDecStmt:
-			if sel := resolveMutationTarget(pass, node.X, aliasMap); sel != nil {
-				handleSelectorMutation(pass, sel)
-			}
+			handleIncDecStmt(pass, node, aliasMap)
+		case *ast.CallExpr:
+			handleCallExpr(pass, node, aliasMap)
 		}
 	})
 
 	return nil, nil
+}
+
+// handleAssignStmt processes assignments and checks mutations.
+func handleAssignStmt(pass *analysis.Pass, node *ast.AssignStmt, aliasMap map[types.Object]*ast.SelectorExpr) {
+	trackAlias(pass, node, aliasMap)
+	for _, lhs := range node.Lhs {
+		if sel := resolveMutationTarget(pass, lhs, aliasMap); sel != nil {
+			handleSelectorMutation(pass, sel)
+		}
+	}
+}
+
+// handleIncDecStmt handles ++/-- operations.
+func handleIncDecStmt(pass *analysis.Pass, node *ast.IncDecStmt, aliasMap map[types.Object]*ast.SelectorExpr) {
+	if sel := resolveMutationTarget(pass, node.X, aliasMap); sel != nil {
+		handleSelectorMutation(pass, sel)
+	}
+}
+
+// handleCallExpr tracks argument aliases in function calls.
+func handleCallExpr(pass *analysis.Pass, node *ast.CallExpr, aliasMap map[types.Object]*ast.SelectorExpr) {
+	fnType := pass.TypesInfo.TypeOf(node.Fun)
+	sig, ok := fnType.(*types.Signature)
+	if !ok {
+		return
+	}
+	for idx, arg := range node.Args {
+		if sel := unwrapSelectorExpr(arg); sel != nil && idx < sig.Params().Len() {
+			param := sig.Params().At(idx)
+			aliasMap[param] = sel
+		}
+	}
 }
 
 // trackAlias captures simple aliasing like: x := &e.Field.
