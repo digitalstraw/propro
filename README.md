@@ -23,7 +23,7 @@ This allows entities to keep their properties exported and still be used directl
 
 
 ## Configuration
-- **`entity-list-file`** may contain path to a go file containgin **`EntityList`** variable with the list of empty pointers to the protected structs.
+- **`entity-list-file`** may contain path to a go file containing **`EntityList`** variable with the list of empty pointers to the protected structs.
   - Such a list is required for database migration purposes by ORM tools like GORM. 
   - Example content of such a go file:
     ```go
