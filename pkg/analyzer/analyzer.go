@@ -34,6 +34,7 @@ var (
 	ProtectedStructsMap map[string]bool
 	protectAllStructs   bool
 	seen                map[string]bool
+	cfg                 map[string]any
 
 	ErrNotInspectAnalyzer = errors.New("inspect analyzer result is not *inspector.Inspector")
 
@@ -45,13 +46,8 @@ func init() {
 	flagSet.StringVar(&StructsArgValue, structsArg, "", "Comma-separated list of protected structs")
 }
 
-func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
-	if v, ok := cfg[entityListFileArg].(string); ok && v != "" {
-		EntityFile = v
-	}
-	if v, ok := cfg[structsArg].([]string); ok && len(v) > 0 {
-		Structs = append(Structs, v...)
-	}
+func NewAnalyzer(inputCfg map[string]any) *analysis.Analyzer {
+	cfg = inputCfg
 
 	return &analysis.Analyzer{
 		Name:     metaName,
@@ -60,6 +56,74 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 		Requires: []*analysis.Analyzer{inspect.Analyzer},
 		Flags:    flagSet,
 		Run:      run,
+	}
+}
+
+func run(pass *analysis.Pass) (any, error) {
+	setUpFromInput()
+
+	seen = make(map[string]bool)
+	aliasMap := map[types.Object]*ast.SelectorExpr{}
+
+	insp, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
+	if !ok {
+		return nil, ErrNotInspectAnalyzer
+	}
+
+	inNodes := []ast.Node{
+		(*ast.AssignStmt)(nil),
+		(*ast.IncDecStmt)(nil),
+		(*ast.CallExpr)(nil),
+	}
+
+	insp.Preorder(inNodes, func(n ast.Node) {
+		switch node := n.(type) {
+		case *ast.AssignStmt:
+			handleAssignStmt(pass, node, aliasMap)
+		case *ast.IncDecStmt:
+			handleIncDecStmt(pass, node, aliasMap)
+		case *ast.CallExpr:
+			handleCallExpr(pass, node, aliasMap)
+		}
+	})
+
+	return nil, nil
+}
+
+// setUpFromInput initializes EntityFile and Structs from cfg or CLI, then builds ProtectedStructsMap.
+func setUpFromInput() {
+	tryInitFromCfg()
+	if EntityFile == "" && len(Structs) == 0 {
+		tryInitFromCLI()
+	}
+	buildProtectedStructMap()
+}
+
+func tryInitFromCfg() {
+	if v, ok := cfg[entityListFileArg].(string); ok && v != "" {
+		EntityFile = v
+	}
+	if v, ok := cfg[structsArg].([]string); ok && len(v) > 0 {
+		Structs = append(Structs, v...)
+	}
+}
+
+// tryInitFromCLI initializes EntityFile and Structs from CLI flags.
+func tryInitFromCLI() {
+	entityListNameFlag := flagSet.Lookup(entityListFileArg)
+	if entityListNameFlag != nil && entityListNameFlag.Value.String() != "" {
+		EntityFile = strings.TrimSpace(entityListNameFlag.Value.String())
+	}
+
+	structsFlag := flagSet.Lookup(structsArg)
+	if structsFlag != nil && structsFlag.Value.String() != "" {
+		parts := strings.Split(structsFlag.Value.String(), ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				Structs = append(Structs, part)
+			}
+		}
 	}
 }
 
@@ -90,58 +154,40 @@ func buildProtectedStructMap() {
 	}
 }
 
-// tryInitFromCLI initializes EntityFile and Structs from CLI flags.
-func tryInitFromCLI() {
-	entityListNameFlag := flagSet.Lookup(entityListVarName)
-	if entityListNameFlag != nil && entityListNameFlag.Value.String() != "" {
-		EntityFile = entityListNameFlag.Value.String()
+// loadEntityList reads a file containing a var EntityList = []Type{...}.
+func loadEntityList(filePath string) map[string]bool {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, filePath, nil, parser.AllErrors)
+	if err != nil {
+		return map[string]bool{}
 	}
 
-	structsFlag := flagSet.Lookup(structsArg)
-	if structsFlag != nil && structsFlag.Value.String() != "" {
-		parts := strings.Split(structsFlag.Value.String(), ",")
-		for _, part := range parts {
-			part = strings.TrimSpace(part)
-			if part != "" {
-				Structs = append(Structs, part)
+	out := map[string]bool{}
+
+	for _, decl := range f.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.VAR {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok || len(vs.Names) == 0 || vs.Names[0].Name != entityListVarName {
+				continue
+			}
+			for _, v := range vs.Values {
+				cl, ok := v.(*ast.CompositeLit)
+				if !ok {
+					continue
+				}
+				for _, elt := range cl.Elts {
+					if name := extractTypeName(elt); name != "" {
+						out[name] = true
+					}
+				}
 			}
 		}
 	}
-}
-
-func run(pass *analysis.Pass) (any, error) {
-	if EntityFile == "" && len(Structs) == 0 {
-		tryInitFromCLI()
-	}
-
-	buildProtectedStructMap()
-
-	seen = make(map[string]bool)
-	aliasMap := map[types.Object]*ast.SelectorExpr{}
-
-	insp, ok := pass.ResultOf[inspect.Analyzer].(*inspector.Inspector)
-	if !ok {
-		return nil, ErrNotInspectAnalyzer
-	}
-
-	inNodes := []ast.Node{
-		(*ast.AssignStmt)(nil),
-		(*ast.IncDecStmt)(nil),
-		(*ast.CallExpr)(nil),
-	}
-
-	insp.Preorder(inNodes, func(n ast.Node) {
-		switch node := n.(type) {
-		case *ast.AssignStmt:
-			handleAssignStmt(pass, node, aliasMap)
-		case *ast.IncDecStmt:
-			handleIncDecStmt(pass, node, aliasMap)
-		case *ast.CallExpr:
-			handleCallExpr(pass, node, aliasMap)
-		}
-	})
-
-	return nil, nil
+	return out
 }
 
 // handleAssignStmt processes assignments and checks mutations.
@@ -356,42 +402,6 @@ func reportIssue(pass *analysis.Pass, pos token.Pos, structName, fieldName strin
 	seen[key] = true
 
 	pass.Reportf(pos, "assignment to exported field %s.%s is forbidden outside its methods", structName, fieldName)
-}
-
-// loadEntityList reads a file containing a var EntityList = []Type{...}.
-func loadEntityList(filePath string) map[string]bool {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, filePath, nil, parser.AllErrors)
-	if err != nil {
-		return map[string]bool{}
-	}
-
-	out := map[string]bool{}
-
-	for _, decl := range f.Decls {
-		gd, ok := decl.(*ast.GenDecl)
-		if !ok || gd.Tok != token.VAR {
-			continue
-		}
-		for _, spec := range gd.Specs {
-			vs, ok := spec.(*ast.ValueSpec)
-			if !ok || len(vs.Names) == 0 || vs.Names[0].Name != entityListVarName {
-				continue
-			}
-			for _, v := range vs.Values {
-				cl, ok := v.(*ast.CompositeLit)
-				if !ok {
-					continue
-				}
-				for _, elt := range cl.Elts {
-					if name := extractTypeName(elt); name != "" {
-						out[name] = true
-					}
-				}
-			}
-		}
-	}
-	return out
 }
 
 // extractTypeName extracts the type name from an expression.

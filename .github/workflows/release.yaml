@@ -20,18 +20,17 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Get latest tag
         id: get_tag
         run: |
-          TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "v0.0.0")
           echo "latest=$TAG" >> $GITHUB_OUTPUT
+          echo "Latest tag: $TAG"
 
       - name: Determine bump type from commit message
         id: bump_type
         run: |
-          # Get the commit message of the triggering commit
           COMMIT_MSG=$(git log -1 --pretty=%B)
           echo "Commit message: $COMMIT_MSG"
 
@@ -48,8 +47,9 @@ jobs:
           fi
 
           echo "bump_type=$bump" >> $GITHUB_OUTPUT
+          echo "Detected bump type: $bump"
 
-      - name: Skip if bump_type is none
+      - name: Skip if bump_type is none (chore)
         if: steps.bump_type.outputs.bump_type == 'none'
         run: |
           echo "Chore commit detected — skipping version tagging."
@@ -60,6 +60,7 @@ jobs:
         run: |
           TAG=${{ steps.get_tag.outputs.latest }}
           TYPE=${{ steps.bump_type.outputs.bump_type }}
+
           VERSION=${TAG#v}
 
           IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
@@ -81,13 +82,15 @@ jobs:
 
           NEW_TAG="v$MAJOR.$MINOR.$PATCH"
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "New tag calculated: $NEW_TAG"
 
       - name: Push new tag
         if: steps.bump_type.outputs.bump_type != 'none'
         run: |
           NEW_TAG=${{ steps.bump.outputs.new_tag }}
+
           if git rev-parse "$NEW_TAG" >/dev/null 2>&1; then
-            echo "Tag $NEW_TAG already exists. Skipping creation and push."
+            echo "Tag $NEW_TAG already exists. Skipping."
           else
             git tag "$NEW_TAG"
             git push origin "$NEW_TAG"
