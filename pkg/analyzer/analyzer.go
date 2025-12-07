@@ -27,8 +27,9 @@ const (
 )
 
 var (
-	EntityFile string
-	Structs    []string
+	StructsArgValue string
+	EntityFile      string
+	Structs         []string
 
 	ProtectedStructsMap map[string]bool
 	protectAllStructs   bool
@@ -39,26 +40,9 @@ var (
 	flagSet flag.FlagSet
 )
 
-func CliInit(args []string) {
-	structs := ""
-
+func init() {
 	flagSet.StringVar(&EntityFile, entityListFileArg, "", "Path to file listing protected structs")
-	flagSet.StringVar(&structs, structsArg, "", "Comma-separated list of protected structs")
-
-	err := flagSet.Parse(args)
-	if err != nil {
-		return
-	}
-
-	EntityFile = strings.TrimSpace(EntityFile)
-
-	parts := strings.Split(structs, ",")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			Structs = append(Structs, part)
-		}
-	}
+	flagSet.StringVar(&StructsArgValue, structsArg, "", "Comma-separated list of protected structs")
 }
 
 func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
@@ -68,8 +52,6 @@ func NewAnalyzer(cfg map[string]any) *analysis.Analyzer {
 	if v, ok := cfg[structsArg].([]string); ok && len(v) > 0 {
 		Structs = append(Structs, v...)
 	}
-
-	buildProtectedStructMap()
 
 	return &analysis.Analyzer{
 		Name:     metaName,
@@ -108,7 +90,32 @@ func buildProtectedStructMap() {
 	}
 }
 
+// tryInitFromCLI initializes EntityFile and Structs from CLI flags.
+func tryInitFromCLI() {
+	entityListNameFlag := flagSet.Lookup(entityListVarName)
+	if entityListNameFlag != nil && entityListNameFlag.Value.String() != "" {
+		EntityFile = entityListNameFlag.Value.String()
+	}
+
+	structsFlag := flagSet.Lookup(structsArg)
+	if structsFlag != nil && structsFlag.Value.String() != "" {
+		parts := strings.Split(structsFlag.Value.String(), ",")
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				Structs = append(Structs, part)
+			}
+		}
+	}
+}
+
 func run(pass *analysis.Pass) (any, error) {
+	if EntityFile == "" && len(Structs) == 0 {
+		tryInitFromCLI()
+	}
+
+	buildProtectedStructMap()
+
 	seen = make(map[string]bool)
 	aliasMap := map[types.Object]*ast.SelectorExpr{}
 
