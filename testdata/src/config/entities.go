@@ -1,6 +1,6 @@
 package config
 
-import "github.com/digitalstraw/propro/testdata/src/protectall"
+import "github.com/digitalstraw/propro/v2/testdata/src/protectall"
 
 var EntityList = []any{
 	&protectall.Entity{},
