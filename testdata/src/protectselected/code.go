@@ -165,7 +165,7 @@ func SomeFunc13() {
 
 func SomeFunc14() {
 	e := &Entity{IntPtrField: new(int)}
-	var v interface{} = e
+	var v any = e
 	if ee, ok := v.(*Entity); ok {
 		*ee.IntPtrField = 101 // want "assignment to exported field Entity.IntPtrField is forbidden outside its methods"
 	}

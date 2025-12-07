@@ -40,10 +40,10 @@ This allows entities to keep their properties exported and still be used directl
     ```yaml
     settings:
       propro:
-        entity-list-file: "path/to/entity_list.go"
+        entity-list-file: path/to/entity_list.go
         structs:
-          - "User"
-          - "Order"
+          - User
+          - Order
     ```
 
 If both `entity-list-file` and `structs` are specified, the union of the two sets is used.
@@ -55,11 +55,12 @@ If neither is specified, the linter **protects ALL STRUCTS**. If you don't want 
 go get github.com/digitalstraw/propro/cmd/propro
 go build -o propro cmd/propro/main.go
 
-propro .
+propro -test=false -entityListFile=./some/path/entity_config.go -structs=Entity1,Entity2 ./...
 ```
 Available CLI parameters:
 - `-entityListFile string` - path to a go file containing `EntityList` variable with the list of protected structs.
 - `-structs string` - comma-separated list of struct names to be protected.
+- `-test bool` - whether to run on test files. Default is `true` and it is recommended to have this off.
 
 
 ## Code Examples

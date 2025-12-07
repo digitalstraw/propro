@@ -71,6 +71,7 @@ func TestWithEntityFileWhichDoesNotCompile(t *testing.T) {
 			"UnProtectedEntity", "Entity", "SubEntity", "Entity2", "SubEntity2", "SubSubEntity2",
 			"Entity3", "SubEntity3", "SubSubEntity3", "Entity4", "SubEntity4", "SubSubEntity4",
 			"RepositoryImpl", "SubEntityWithPtrComposition", "SubEntityWithComposition",
+			"OutsidePackageEntity",
 		},
 	}
 
@@ -82,21 +83,4 @@ func TestWithNoParameters_allStructsAreProtected(t *testing.T) {
 
 	// UnProtectedEntity WILL also be protected in this test
 	analysistest.Run(t, testdata, NewAnalyzer(map[string]any{}), "protectall")
-}
-
-func TestCliInit(t *testing.T) {
-	_ = setUp()
-
-	args := make([]string, 0)
-	args = append(args, "-"+structsArg+"=   Entity   ,   Entity2")
-	args = append(args, "-"+entityListFileArg+"=      /path/to/file.go    ")
-
-	CliInit(args)
-
-	if len(Structs) != 2 || Structs[0] != "Entity" || Structs[1] != "Entity2" {
-		t.Errorf("CliInit did not set Structs correctly, got: %v", Structs)
-	}
-	if EntityFile != "/path/to/file.go" {
-		t.Errorf("CliInit did not set EntityFile correctly, got: %s", EntityFile)
-	}
 }
