@@ -68,7 +68,7 @@ the linter **protects ALL STRUCTS** in the analyzed packages. If you don't want 
 
 
 ## Usage with golangci-lint
-IMPORTANT: this linter is not part of golangci-lint, the PR was declined but talks are not yet closed. 
+IMPORTANT: this linter is not part of golangci-lint, the PR was declined but discussion is ongoing yet. 
 Feel free to add your comments [in the PR](https://github.com/golangci/golangci-lint/pull/6236).
 
 To use `propro` with `golangci-lint` now, you need to build the linter binary [from the fork](https://github.com/digitalstraw/golangci-lint/tree/add-propro-linter) 
@@ -147,4 +147,4 @@ These unsafe paths exist but are uncommon and intentionally excluded to avoid fa
   - `Breaking:` for breaking changes -> bumps major version
   - `Chore:` for changes that do not modify src or test files
   - Anything else will be considered as `Fix:`
-  - Note: prefixes are **case-insensitive** and does not have to be followed by colon, but it is recommended.
+  - Note: prefixes are **case-insensitive** and do not have to be followed by a colon, but it is recommended.
