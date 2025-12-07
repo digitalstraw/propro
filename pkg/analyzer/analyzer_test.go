@@ -85,7 +85,7 @@ func TestWithNoParameters_allStructsAreProtected(t *testing.T) {
 	analysistest.Run(t, testdata, NewAnalyzer(map[string]any{}), "protectall")
 }
 
-func TestCliInit(t *testing.T) {
+func TestTryInitFromCLI(t *testing.T) {
 	_ = setUp()
 
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -99,9 +99,9 @@ func TestCliInit(t *testing.T) {
 	tryInitFromCLI()
 
 	if len(Structs) != 2 || Structs[0] != "Entity" || Structs[1] != "Entity2" {
-		t.Errorf("CliInit did not set Structs correctly, got: %v", Structs)
+		t.Errorf("tryInitFromCLI did not set Structs correctly, got: %v", Structs)
 	}
 	if EntityFile != "/path/to/file.go" {
-		t.Errorf("CliInit did not set EntityFile correctly, got: %s", EntityFile)
+		t.Errorf("tryInitFromCLI did not set EntityFile correctly, got: %s", EntityFile)
 	}
 }
