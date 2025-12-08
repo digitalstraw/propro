@@ -82,15 +82,20 @@ go build -o golangci-lint ./cmd/golangci-lint
 mv golangci-lint $GOPATH/bin/
 ```
 
+## Go Get
+```bash
+go get github.com/digitalstraw/propro/v2/
+```
 
 
 ## Usage as the Standalone CLI Tool
 ```bash
-go get github.com/digitalstraw/propro/v2/cmd/propro
+git clone git@github.com:digitalstraw/propro.git
 go build -o propro cmd/propro/main.go
-
+mv propro $GOPATH/bin/
 propro -test=false -entityListFile=./some/path/entity_config.go -structs=Entity1,Entity2 ./...
 ```
+
 Available CLI parameters:
 - `-entityListFile string` - path to a go file containing `EntityList` variable with the list of protected structs.
 - `-structs string` - comma-separated list of struct names to be protected.
@@ -147,4 +152,3 @@ These unsafe paths exist but are uncommon and intentionally excluded to avoid fa
   - `Breaking:` for breaking changes -> bumps major version
   - `Chore:` for changes that do not modify src or test files
   - Anything else will be considered as `Fix:`
-  - Note: prefixes are **case-insensitive** and do not have to be followed by a colon, but it is recommended.
