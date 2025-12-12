@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/github/license/digitalstraw/propro)](/LICENSE)
 [![CI](https://github.com/digitalstraw/propro/actions/workflows/ci.yaml/badge.svg)](https://github.com/digitalstraw/propro/actions/workflows/ci.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/digitalstraw/propro)](https://goreportcard.com/report/github.com/digitalstraw/propro)
-[![Coverage](https://coveralls.io/repos/github/digitalstraw/propro/badge.svg?branch=main)](https://coveralls.io/github/digitalstraw/propro?branch=main)
+[![Coverage](https://coveralls.io/repos/github/digitalstraw/propro/badge.svg?branch=main&v=2.0.1)](https://coveralls.io/github/digitalstraw/propro?branch=main&v=2.0.1)
 
 `propro` stands for **Protected Properties**. It prevents direct writes to public/exported properties of structs that represent 
 entities. It is usable especially in DDD (Domain-Driven Design) contexts where entities in the domain layer should enforce business rules
