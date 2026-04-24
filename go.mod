@@ -1,4 +1,4 @@
-module github.com/digitalstraw/propro/v2
+module github.com/digitalstraw/propro/v3
 
 go 1.24.0
 

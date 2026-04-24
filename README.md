@@ -87,7 +87,7 @@ mv golangci-lint $GOPATH/bin/
 
 ## Go Get
 ```bash
-go get github.com/digitalstraw/propro/v2/
+go get github.com/digitalstraw/propro/v3/
 ```
 
 

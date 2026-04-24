@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/digitalstraw/propro/v2/pkg/analyzer"
+	"github.com/digitalstraw/propro/v3/pkg/analyzer"
 	"golang.org/x/tools/go/analysis/singlechecker"
 )
 
