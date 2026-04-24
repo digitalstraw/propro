@@ -11,6 +11,7 @@ import (
 
 func setUp() string {
 	ProtectedStructsMap = make(map[string]bool)
+	protectAllStructs = false
 	EntityFiles = nil
 	Structs = []string{}
 

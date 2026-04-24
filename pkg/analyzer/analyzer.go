@@ -92,7 +92,12 @@ func run(pass *analysis.Pass) (any, error) {
 }
 
 // setUpFromInput initializes EntityFiles and Structs from cfg or CLI, then builds ProtectedStructsMap.
+// It is a no-op on subsequent calls; run() is invoked once per analyzed package and all share the
+// same configuration, so re-reading would grow the global slices without bound.
 func setUpFromInput() {
+	if len(ProtectedStructsMap) > 0 || protectAllStructs {
+		return
+	}
 	tryInitFromCfg()
 	if len(EntityFiles) == 0 && len(Structs) == 0 {
 		tryInitFromCLI()
@@ -142,11 +147,6 @@ func tryInitFromCLI() {
 
 // buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty.
 func buildProtectedStructMap() {
-	if len(ProtectedStructsMap) > 0 || protectAllStructs {
-		// Concurrency expected: already built
-		return
-	}
-
 	ProtectedStructsMap = make(map[string]bool)
 
 	for _, file := range EntityFiles {
