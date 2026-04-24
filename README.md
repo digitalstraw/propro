@@ -40,15 +40,17 @@ model/DTO structs and mapping code between them, reducing boilerplate and mainte
 ```yaml
 settings:
   propro:
-    entity-list-file: path/to/entity_list.go
+    entity-list-files:
+      - path/to/entity_list.go
+      - path/to/another_entity_list.go
     structs:
       - User
       - Order
 ```
 
-- **`entity-list-file`** may contain path to a go file containing **`EntityList`** variable with the list of empty pointers to 
-  the protected structs.
-  - Such a list is required for database migration purposes by ORM tools. 
+- **`entity-list-files`** may contain a list of paths to go files each containing an **`EntityList`** variable with the list of
+  empty pointers to the protected structs.
+  - Such a list is required for database migration purposes by ORM tools.
   - Example content of such a go file:
     ```go
     var EntityList = []any{
@@ -56,13 +58,14 @@ settings:
         &users.Order{},
     }
     ```
-  - The file may be empty or not present, and then this configuration option is ignored.
+  - Any listed file may be empty or not present, in which case it contributes no entries. The union of the `EntityList`
+    entries across all listed files is used.
 
 
 - **`structs`**: may contain a list of struct names that should be protected. May be empty or not present.  
 
 
-If both `entity-list-file` and `structs` are specified, the union of the two sets is used. If neither is specified, 
+If both `entity-list-files` and `structs` are specified, the union of the two sets is used. If neither is specified, 
 the linter **protects ALL STRUCTS** in the analyzed packages. If you don't want any structs to be protected, just disable the linter.
 
 
@@ -93,11 +96,11 @@ go get github.com/digitalstraw/propro/v2/
 git clone git@github.com:digitalstraw/propro.git
 go build -o propro cmd/propro/main.go
 mv propro $GOPATH/bin/
-propro -test=false -entityListFile=./some/path/entity_config.go -structs=Entity1,Entity2 ./...
+propro -test=false -entityListFiles=./some/path/entity_config.go,./other/path/entity_config.go -structs=Entity1,Entity2 ./...
 ```
 
 Available CLI parameters:
-- `-entityListFile string` - path to a go file containing `EntityList` variable with the list of protected structs.
+- `-entityListFiles string` - comma-separated list of paths to go files each containing an `EntityList` variable with the list of protected structs.
 - `-structs string` - comma-separated list of struct names to be protected.
 - `-test bool` - whether to run on test files. This flag is provided by the driver, not the analyzer. Default 
   is `true` and it is recommended to turn it off.

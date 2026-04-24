@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -22,14 +23,15 @@ const (
 	entityListVarName = "EntityList"
 
 	// These must be identical to golangci-lint repo config keys.
-	entityListFileArg = "entityListFile"
-	structsArg        = "structs"
+	entityListFilesArg = "entityListFiles"
+	structsArg         = "structs"
 )
 
 var (
-	StructsArgValue string
-	EntityFile      string
-	Structs         []string
+	StructsArgValue     string
+	EntityFilesArgValue string
+	EntityFiles         []string
+	Structs             []string
 
 	ProtectedStructsMap map[string]bool
 	protectAllStructs   bool
@@ -39,10 +41,12 @@ var (
 	ErrNotInspectAnalyzer = errors.New("inspect analyzer result is not *inspector.Inspector")
 
 	flagSet flag.FlagSet
+
+	initOnce sync.Once
 )
 
 func init() {
-	flagSet.StringVar(&EntityFile, entityListFileArg, "", "Path to file listing protected structs")
+	flagSet.StringVar(&EntityFilesArgValue, entityListFilesArg, "", "Comma-separated list of paths to files listing protected structs")
 	flagSet.StringVar(&StructsArgValue, structsArg, "", "Comma-separated list of protected structs")
 }
 
@@ -90,29 +94,45 @@ func run(pass *analysis.Pass) (any, error) {
 	return nil, nil
 }
 
-// setUpFromInput initializes EntityFile and Structs from cfg or CLI, then builds ProtectedStructsMap.
+// setUpFromInput initializes EntityFiles and Structs from cfg or CLI, then builds ProtectedStructsMap.
+// run() may be invoked concurrently per package (e.g. under golangci-lint); sync.Once keeps
+// initialization race-free and single-shot so the global slices don't grow across packages.
 func setUpFromInput() {
-	tryInitFromCfg()
-	if EntityFile == "" && len(Structs) == 0 {
-		tryInitFromCLI()
-	}
-	buildProtectedStructMap()
+	initOnce.Do(func() {
+		tryInitFromCfg()
+		if len(EntityFiles) == 0 && len(Structs) == 0 {
+			tryInitFromCLI()
+		}
+		buildProtectedStructMap()
+	})
 }
 
 func tryInitFromCfg() {
-	if v, ok := cfg[entityListFileArg].(string); ok && v != "" {
-		EntityFile = v
+	switch v := cfg[entityListFilesArg].(type) {
+	case []string:
+		EntityFiles = append(EntityFiles, v...)
+	case []any:
+		for _, item := range v {
+			if s, ok := item.(string); ok && s != "" {
+				EntityFiles = append(EntityFiles, s)
+			}
+		}
 	}
 	if v, ok := cfg[structsArg].([]string); ok && len(v) > 0 {
 		Structs = append(Structs, v...)
 	}
 }
 
-// tryInitFromCLI initializes EntityFile and Structs from CLI flags.
+// tryInitFromCLI initializes EntityFiles and Structs from CLI flags.
 func tryInitFromCLI() {
-	entityListNameFlag := flagSet.Lookup(entityListFileArg)
-	if entityListNameFlag != nil && entityListNameFlag.Value.String() != "" {
-		EntityFile = strings.TrimSpace(entityListNameFlag.Value.String())
+	entityListFilesFlag := flagSet.Lookup(entityListFilesArg)
+	if entityListFilesFlag != nil && entityListFilesFlag.Value.String() != "" {
+		for _, part := range strings.Split(entityListFilesFlag.Value.String(), ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				EntityFiles = append(EntityFiles, part)
+			}
+		}
 	}
 
 	structsFlag := flagSet.Lookup(structsArg)
@@ -129,15 +149,14 @@ func tryInitFromCLI() {
 
 // buildProtectedStructMap populates ProtectedStructsMap and sets protectAllStructs when empty.
 func buildProtectedStructMap() {
-	if len(ProtectedStructsMap) > 0 || protectAllStructs {
-		// Concurrency expected: already built
-		return
-	}
-
 	ProtectedStructsMap = make(map[string]bool)
 
-	if EntityFile != "" {
-		for k := range loadEntityList(EntityFile) {
+	for _, file := range EntityFiles {
+		file = strings.TrimSpace(file)
+		if file == "" {
+			continue
+		}
+		for k := range loadEntityList(file) {
 			ProtectedStructsMap[k] = true
 		}
 	}
