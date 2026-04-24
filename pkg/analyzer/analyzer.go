@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"go/types"
 	"strings"
+	"sync"
 
 	"golang.org/x/tools/go/analysis"
 	"golang.org/x/tools/go/analysis/passes/inspect"
@@ -40,6 +41,8 @@ var (
 	ErrNotInspectAnalyzer = errors.New("inspect analyzer result is not *inspector.Inspector")
 
 	flagSet flag.FlagSet
+
+	initOnce sync.Once
 )
 
 func init() {
@@ -92,17 +95,16 @@ func run(pass *analysis.Pass) (any, error) {
 }
 
 // setUpFromInput initializes EntityFiles and Structs from cfg or CLI, then builds ProtectedStructsMap.
-// It is a no-op on subsequent calls; run() is invoked once per analyzed package and all share the
-// same configuration, so re-reading would grow the global slices without bound.
+// run() may be invoked concurrently per package (e.g. under golangci-lint); sync.Once keeps
+// initialization race-free and single-shot so the global slices don't grow across packages.
 func setUpFromInput() {
-	if len(ProtectedStructsMap) > 0 || protectAllStructs {
-		return
-	}
-	tryInitFromCfg()
-	if len(EntityFiles) == 0 && len(Structs) == 0 {
-		tryInitFromCLI()
-	}
-	buildProtectedStructMap()
+	initOnce.Do(func() {
+		tryInitFromCfg()
+		if len(EntityFiles) == 0 && len(Structs) == 0 {
+			tryInitFromCLI()
+		}
+		buildProtectedStructMap()
+	})
 }
 
 func tryInitFromCfg() {
@@ -150,6 +152,10 @@ func buildProtectedStructMap() {
 	ProtectedStructsMap = make(map[string]bool)
 
 	for _, file := range EntityFiles {
+		file = strings.TrimSpace(file)
+		if file == "" {
+			continue
+		}
 		for k := range loadEntityList(file) {
 			ProtectedStructsMap[k] = true
 		}

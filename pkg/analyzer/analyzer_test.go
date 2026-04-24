@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"golang.org/x/tools/go/analysis/analysistest"
@@ -14,6 +15,7 @@ func setUp() string {
 	protectAllStructs = false
 	EntityFiles = nil
 	Structs = []string{}
+	initOnce = sync.Once{}
 
 	path, _ := os.Getwd()
 	testdata := filepath.Join(filepath.Dir(filepath.Dir(path)), "testdata")
@@ -87,6 +89,18 @@ func TestWithNonExistentEntityFile(t *testing.T) {
 	}
 
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
+}
+
+func TestWithEmptyAndWhitespaceEntityFilePaths_fallsBackToAllStructs(t *testing.T) {
+	testdata := setUp()
+
+	// An entity-list-files entry that is empty or whitespace must not be treated as "provided";
+	// with no real paths and no structs, the linter falls back to protecting all structs.
+	cfg := map[string]any{
+		entityListFilesArg: []string{"", "   "},
+	}
+
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectall")
 }
 
 func TestTryInitFromCfg_WithAnySliceOfEntityFiles(t *testing.T) {
