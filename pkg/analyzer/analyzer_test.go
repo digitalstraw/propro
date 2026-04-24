@@ -76,6 +76,33 @@ func TestWithMultipleEntityFiles(t *testing.T) {
 	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
 }
 
+func TestWithNonExistentEntityFile(t *testing.T) {
+	testdata := setUp()
+	cfg := map[string]any{
+		entityListFilesArg: []string{
+			filepath.Join(testdata, "src/does_not_exist.go"),
+			filepath.Join(testdata, "src/config/entities.go"),
+		},
+	}
+
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
+}
+
+func TestTryInitFromCfg_WithAnySliceOfEntityFiles(t *testing.T) {
+	testdata := setUp()
+
+	// golangci-lint may decode YAML list values as []any rather than []string.
+	cfg := map[string]any{
+		entityListFilesArg: []any{
+			filepath.Join(testdata, "src/config/entities.go"),
+			"",
+			123, // non-string entries are ignored
+		},
+	}
+
+	analysistest.Run(t, testdata, NewAnalyzer(cfg), "protectselected")
+}
+
 func TestWithEntityFileWhichDoesNotCompile(t *testing.T) {
 	testdata := setUp()
 	cfg := map[string]any{
